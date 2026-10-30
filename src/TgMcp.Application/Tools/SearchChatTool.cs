@@ -17,7 +17,7 @@ public sealed class SearchChatTool
             if (string.IsNullOrWhiteSpace(query)) throw new ArgumentException("query is empty", nameof(query));
             var target = await _c.Chats.ResolveAsync(chat, token).ConfigureAwait(false);
             var d = _c.Policy.Check(target.Info, Need.Read, Need.Search);
-            if (!d.Allowed) return ToolOutcome.Denied(d, target.Id);
+            if (!d.Allowed) return _c.Deny(d, target);
             var (kept, dropped) = await MessageCollector.CollectAsync(
                 (from, n) => _c.Telegram.SearchChatMessagesAsync(target.Id, query, from, n, token),
                 fromMessageId, _c.ClampLimit(limit), d, _c.Time.GetUtcNow()).ConfigureAwait(false);

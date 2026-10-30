@@ -134,7 +134,9 @@ public class ToolTests
         var h = H(("Chats__0__Id", "111"), ("Chats__0__Write", "on"));
         var r = await h.Read.RunAsync("111", 10, 0, Ct);
         Assert.True(r.IsError);
-        Assert.Contains("read=false", r.Text, StringComparison.Ordinal);
+        Assert.Contains("Chat 111", r.Text, StringComparison.Ordinal);
+        Assert.Contains("TGMCP_Chats__0__Read=true", r.Text, StringComparison.Ordinal);
+        Assert.Equal("read=false", h.LastAudit.Reason);
         Assert.Equal(111, h.LastAudit.ChatId);
         Assert.False(h.LastAudit.Allowed);
     }
@@ -145,7 +147,8 @@ public class ToolTests
         var h = H(("Defaults__Read", "true"), ("Deny__0__Type", "bot"));
         var r = await h.Read.RunAsync("333", 10, 0, Ct);
         Assert.True(r.IsError);
-        Assert.Contains("deny[0]", r.Text, StringComparison.Ordinal);
+        Assert.Equal(Denials.HardDeny, r.Text);
+        Assert.StartsWith("deny[0]", h.LastAudit.Rule, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -187,6 +190,74 @@ public class ToolTests
         Assert.Equal(new long[] { 2L, 1L }, Ids(await h.Read.RunAsync("111", 10, 2, Ct)));
     }
 
+    // ------------------------------------------------------------- actionable denials
+
+    [Fact]
+    public async Task Unmatched_chat_gets_a_rule_hint_with_the_next_free_index()
+    {
+        var h = H(("Chats__0__Id", "-100444"), ("Chats__0__Read", "true"), ("Chats__7__Id", "-100999"), ("Chats__7__Read", "true"));
+        var r = await h.Read.RunAsync("@friend", 10, 0, Ct);
+        Assert.True(r.IsError);
+        Assert.Equal("Chat 111 (\"Friend\", @friend) is not allowed. To grant read-only access add: TGMCP_Chats__8__Id=111 and TGMCP_Chats__8__Read=true", r.Text);
+        Assert.Equal("defaults", h.LastAudit.Rule);
+        Assert.DoesNotContain("Friend", h.LastAudit.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Missing_feature_hint_keeps_existing_features()
+    {
+        var h = H(("Chats__0__Id", "-100222"), ("Chats__0__Read", "true"), ("Chats__0__Features", "search"));
+        var r = await h.Download.RunAsync("-100222", 14, Ct);
+        Assert.Contains("TGMCP_Chats__0__Features=media_download,search", r.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Missing_feature_without_rule_suggests_a_full_rule()
+    {
+        var h = H(("Defaults__Read", "true"));
+        var r = await h.SearchChat.RunAsync("111", "hello", 10, 0, Ct);
+        Assert.Contains("TGMCP_Chats__0__Id=111, TGMCP_Chats__0__Read=true and TGMCP_Chats__0__Features=search", r.Text, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Deny__0__Type", "bot")]
+    [InlineData("Deny__0__Id", "333")]
+    [InlineData("Deny__0__Username", "mybank_bot")]
+    public async Task Hard_deny_reveals_nothing(string key, string value)
+    {
+        var h = H(("Chats__0__Id", "333"), ("Chats__0__Read", "true"), (key, value));
+        foreach (var r in new[]
+        {
+            await h.Read.RunAsync("333", 10, 0, Ct),
+            await h.Get.RunAsync("@mybank_bot", 20, Ct),
+            await h.Topic.RunAsync("333", 1, 10, 0, Ct),
+        })
+        {
+            Assert.True(r.IsError);
+            Assert.Equal(Denials.HardDeny, r.Text);
+        }
+    }
+
+    [Fact]
+    public async Task Since_days_denial_names_the_setting()
+    {
+        var h = H(("Defaults__Read", "true"), ("Defaults__SinceDays", "7"));
+        var r = await h.Get.RunAsync("111", 1, Ct);
+        Assert.Contains("7-day limit for Chat 111", r.Text, StringComparison.Ordinal);
+        Assert.Contains("TGMCP_Defaults__SinceDays", r.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Folder_failure_does_not_echo_folder_names()
+    {
+        var h = H(("Defaults__Read", "true"), ("Deny__0__Folder", "Finance"));
+        h.Telegram.Folders = new() { ["Other"] = new HashSet<long>() };
+        var r = await h.Read.RunAsync("111", 10, 0, Ct);
+        Assert.True(r.IsError);
+        Assert.DoesNotContain("Finance", r.Text, StringComparison.Ordinal);
+        Assert.Contains("TGMCP_Deny__N__Folder", r.Text, StringComparison.Ordinal);
+    }
+
     // ------------------------------------------------------------- read_topic
 
     [Fact]
@@ -195,7 +266,8 @@ public class ToolTests
         var h = H(("Chats__0__Id", "-100222"), ("Chats__0__Read", "true"), ("Chats__0__Topics", "5"));
         var denied = await h.Topic.RunAsync("-100222", 9, 10, 0, Ct);
         Assert.True(denied.IsError);
-        Assert.Contains("topic 9", denied.Text, StringComparison.Ordinal);
+        Assert.Contains("Topic 9", denied.Text, StringComparison.Ordinal);
+        Assert.Contains("TGMCP_Chats__0__Topics", denied.Text, StringComparison.Ordinal);
         Assert.Equal(new long[] { 15L, 14L, 13L, 11L }, Ids(await h.Topic.RunAsync("-100222", 5, 10, 0, Ct)));
     }
 
@@ -222,7 +294,7 @@ public class ToolTests
                   ("Chats__1__Id", "-100222"), ("Chats__1__Read", "true"), ("Chats__1__Topics", "5"));
         Assert.Equal(new long[] { 2L }, Ids(await h.Get.RunAsync("111", 2, Ct)));
         Assert.Contains("SinceDays", (await h.Get.RunAsync("111", 1, Ct)).Text, StringComparison.Ordinal);
-        Assert.Contains("topics", (await h.Get.RunAsync("-100222", 12, Ct)).Text, StringComparison.Ordinal);
+        Assert.Contains("Topic 9 of Chat -100222", (await h.Get.RunAsync("-100222", 12, Ct)).Text, StringComparison.Ordinal);
         Assert.Equal(new long[] { 11L }, Ids(await h.Get.RunAsync("-100222", 11, Ct)));
         var missing = await h.Get.RunAsync("111", 999, Ct);
         Assert.True(missing.IsError);
@@ -244,7 +316,8 @@ public class ToolTests
         var h = H(("Chats__0__Id", "111"), ("Chats__0__Read", "true"));
         var r = await h.SearchChat.RunAsync("111", "hello", 10, 0, Ct);
         Assert.True(r.IsError);
-        Assert.Contains("feature search", r.Text, StringComparison.Ordinal);
+        Assert.Contains("'search' feature", r.Text, StringComparison.Ordinal);
+        Assert.Contains("TGMCP_Chats__0__Features=search", r.Text, StringComparison.Ordinal);
 
         var ok = H(("Chats__0__Id", "111"), ("Chats__0__Read", "true"), ("Chats__0__Features", "search"));
         Assert.Equal(new long[] { 2L, 1L }, Ids(await ok.SearchChat.RunAsync("111", "hello", 10, 0, Ct)));
@@ -312,7 +385,7 @@ public class ToolTests
     {
         var h = H(("Chats__0__Id", "-100222"), ("Chats__0__Read", "true"), ("Chats__0__Features", "media_download"));
         Assert.Contains("Limits__MaxMediaMb", (await h.Download.RunAsync("-100222", 13, Ct)).Text, StringComparison.Ordinal);
-        Assert.Contains("size unknown", (await h.Download.RunAsync("-100222", 15, Ct)).Text, StringComparison.Ordinal);
+        Assert.Contains("size is unknown", (await h.Download.RunAsync("-100222", 15, Ct)).Text, StringComparison.Ordinal);
         Assert.Empty(h.Telegram.Downloads);
     }
 

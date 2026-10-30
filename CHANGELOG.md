@@ -5,6 +5,12 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Audit log failures now fail closed: calls are denied before contacting Telegram if the audit file
+  is not writable, and results are withheld if the audit record cannot be written afterwards.
+- Permission denials name the chat and include a one-line config hint for the operator; Deny-rule
+  hits return only "denied by policy".
+
 ## [0.1.0] - 2026-10-30
 
 ### Added

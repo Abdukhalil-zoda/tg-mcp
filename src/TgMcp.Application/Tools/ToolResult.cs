@@ -64,12 +64,16 @@ public sealed record ToolOutcome(ToolResult Result, long? ChatId, int Count, boo
         return new(ToolResult.Ok(payload), chatId, count, true, d.Rule, reason);
     }
 
-    /// <summary>Policy denial.</summary>
-    public static ToolOutcome Denied(Decision d, long? chatId)
+    /// <summary>Policy denial with the client-facing <paramref name="message"/> (see <see cref="Denials"/>); audit keeps rule and reason.</summary>
+    public static ToolOutcome Denied(Decision d, long? chatId, string message)
     {
         ArgumentNullException.ThrowIfNull(d);
-        return new(ToolResult.Error($"denied by policy ({d.Rule}): {d.Reason}"), chatId, 0, false, d.Rule, d.Reason);
+        return new(ToolResult.Error(message), chatId, 0, false, d.Rule, d.Reason);
     }
+
+    /// <summary>Refused by a limit (e.g. media size).</summary>
+    public static ToolOutcome Refused(string message, long? chatId, string rule) =>
+        new(ToolResult.Error(message), chatId, 0, false, rule, message);
 
     /// <summary>Allowed by policy but failed (bad argument, not found, too large).</summary>
     public static ToolOutcome Failed(string message, long? chatId, string rule) =>

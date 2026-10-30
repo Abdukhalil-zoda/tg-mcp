@@ -164,6 +164,22 @@ public class PolicyTests
     }
 
     [Fact]
+    public void Decision_reports_source_rule_index_and_missing_need()
+    {
+        var p = On(("Chats__3__Id", "111"), ("Chats__3__Read", "true"), ("Deny__0__Type", "bot"));
+        var rule = p.Check(Friend, Need.Read, Need.Search);
+        Assert.Equal(DecisionSource.ChatRule, rule.Source);
+        Assert.Equal(3, rule.RuleIndex);
+        Assert.Equal(Need.Search, rule.Missing);
+        var dflt = p.Check(Team, Need.Read);
+        Assert.Equal(DecisionSource.Defaults, dflt.Source);
+        Assert.Null(dflt.RuleIndex);
+        Assert.Equal(Need.Read, dflt.Missing);
+        Assert.Equal(DecisionSource.Deny, p.Check(Bank, Need.Read).Source);
+        Assert.Equal(DecisionSource.Global, new PolicyEngine(PolicyConfig.FromPairs()).Check(Friend, Need.Read).Source);
+    }
+
+    [Fact]
     public void Write_modes()
     {
         var p = On(("Chats__0__Id", "111"), ("Chats__0__Write", "draft"), ("Chats__1__Id", "-100222"), ("Chats__1__Write", "on"));

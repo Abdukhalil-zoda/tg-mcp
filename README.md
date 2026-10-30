@@ -40,6 +40,20 @@ TgMcp is a third-party Telegram client built on TDLib with **your own** `api_id`
 
 Each message is returned as `{chat, id, date_utc, sender, from_me, text, has_media}`. The `chat` argument takes a numeric chat id (as shown by `list_chats`) or a public `@username`.
 
+### Denial messages
+
+When a call is denied because of permissions, the error names the chat and tells the operator exactly what to add, for example:
+
+```
+Chat -1001234567890 ("Dev Team") is not allowed. To grant read-only access add: TGMCP_Chats__3__Id=-1001234567890 and TGMCP_Chats__3__Read=true
+Chat 111 ("Alice", @alice) does not have the 'search' feature. To grant it set: TGMCP_Chats__0__Features=search
+Topic 9 of Chat -1009876543210 ("Forum") is not allowed. To allow it add 9 to TGMCP_Chats__2__Topics.
+```
+
+`N` in a suggestion is the next free rule index. Only data that was already resolved for the call (id, title, first username) is shown. A chat hit by a **Deny** rule is a deliberate hard block, so the client only sees `denied by policy`: no id, no rule and no hint. The audit record never contains titles or text, only the rule label and a short reason.
+
+**Audit fails closed.** If the audit file isn't writable, every call is denied before anything is sent to Telegram. If a record can't be written after the call, the result is withheld and an error is returned. Either way, the failure is logged to stderr.
+
 ## Quick start
 
 Requirements: Docker. To build without Docker, you need the .NET 11 SDK (see `global.json`).
@@ -151,6 +165,7 @@ src/TgMcp.Infrastructure.Telegram TDLib adapter, login flow, media store
 src/TgMcp.Server                  composition root: Generic Host, MCP stdio, CLI
 tests/TgMcp.Domain.Tests          policy and config tests
 tests/TgMcp.Application.Tests     tool gating against a fake Telegram client, retry, rate limit
+tests/TgMcp.Infrastructure.Tests  audit sink, media store (file system)
 ```
 
 Image: `mcr.microsoft.com/dotnet/runtime:11.0.0-rc.3`, framework-dependent publish for linux-x64. The runtime image already ships the libraries `libtdjson.so` needs (libssl3, zlib, libstdc++), as checked with `ldd`. Self-contained or trimmed builds aren't used, because TDLib's JSON layer relies on reflection.

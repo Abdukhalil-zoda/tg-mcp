@@ -53,7 +53,7 @@ public sealed partial class ToolRunner
         }
         else if (_policy.CheckSwitches(globalNeeds) is { Allowed: false } g)
         {
-            outcome = ToolOutcome.Denied(g, null);
+            outcome = ToolOutcome.Denied(g, null, Denials.Message(_policy.Config, g, null));
         }
         else
         {

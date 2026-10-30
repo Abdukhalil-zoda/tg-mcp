@@ -14,6 +14,13 @@ public sealed record ToolContext(ToolRunner Runner, IPolicy Policy, ChatResolver
     /// <summary>Clamps a requested count to [1, Limits__MaxMessagesPerCall].</summary>
     public int ClampLimit(int requested) => Math.Clamp(requested, 1, Policy.Config.MaxMessagesPerCall);
 
+    /// <summary>A denial outcome with an actionable (or, for Deny rules, opaque) message.</summary>
+    public ToolOutcome Deny(Decision d, TgChat? chat, DenialKind kind = DenialKind.Permission, int? topicId = null)
+    {
+        ArgumentNullException.ThrowIfNull(d);
+        return ToolOutcome.Denied(d, chat?.Id, Denials.Message(Policy.Config, d, chat, kind, topicId));
+    }
+
     /// <summary>Standard payload for a list of messages.</summary>
     public static object MessagesPayload(TgChat? chat, IEnumerable<TgMessage> messages) => new
     {

@@ -120,6 +120,21 @@ public enum Need
     Pin,
 }
 
+/// <summary>Which part of the policy produced a decision.</summary>
+public enum DecisionSource
+{
+    /// <summary>Master switch, global switches, invalid config or unresolved folders.</summary>
+    Global,
+    /// <summary>A Deny rule (a deliberate hard block).</summary>
+    Deny,
+    /// <summary>A Chats rule.</summary>
+    ChatRule,
+    /// <summary>No Chats rule matched; Defaults applied.</summary>
+    Defaults,
+    /// <summary>A limit (listing mode, size, rate).</summary>
+    Limits,
+}
+
 /// <summary>A chat as seen by the policy (no Telegram types).</summary>
 /// <param name="Id">Chat id.</param>
 /// <param name="Title">Chat title.</param>
@@ -143,6 +158,9 @@ public sealed record ChatInfo(long Id, string Title, IReadOnlyList<string> Usern
 /// <param name="Features">Effective per-chat features.</param>
 /// <param name="SinceDays">Messages older than this many days are hidden (null = no limit).</param>
 /// <param name="Topics">Allowed forum topic ids (null = all).</param>
+/// <param name="Source">Which part of the policy decided.</param>
+/// <param name="RuleIndex">N of the matched <c>Chats__N</c> rule, if any.</param>
+/// <param name="Missing">The need that was not granted, for denials by <see cref="IPolicy.Check"/>.</param>
 public sealed record Decision(
     bool Allowed,
     string Rule,
@@ -151,7 +169,10 @@ public sealed record Decision(
     WriteMode Write = WriteMode.Off,
     IReadOnlySet<Feature>? Features = null,
     int? SinceDays = null,
-    IReadOnlySet<int>? Topics = null)
+    IReadOnlySet<int>? Topics = null,
+    DecisionSource Source = DecisionSource.Global,
+    int? RuleIndex = null,
+    Need? Missing = null)
 {
     /// <summary>Effective features, never null.</summary>
     public IReadOnlySet<Feature> FeatureSet => Features ?? Names.NoFeatures;

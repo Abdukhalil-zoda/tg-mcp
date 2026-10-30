@@ -113,14 +113,16 @@ public sealed class PolicyEngine : IPolicy
         ArgumentNullException.ThrowIfNull(chat);
         if (GlobalDenyReason() is string why) return new Decision(false, "global", why);
         foreach (var d in Config.Denies)
-            if (Matches(d.Selector, chat)) return new Decision(false, d.Label, "denied by rule");
+            if (Matches(d.Selector, chat)) return new Decision(false, d.Label, "denied by rule", Source: DecisionSource.Deny);
         var r = Config.Chats.FirstOrDefault(r => Matches(r.Selector, chat));
         return new Decision(true, r?.Label ?? "defaults", "ok",
             Read: r?.Read ?? Config.DefaultRead,
             Write: r?.Write ?? Config.DefaultWrite,
             Features: r?.Features ?? Config.DefaultFeatures,
             SinceDays: r?.SinceDays ?? Config.DefaultSinceDays,
-            Topics: r?.Topics);
+            Topics: r?.Topics,
+            Source: r is null ? DecisionSource.Defaults : DecisionSource.ChatRule,
+            RuleIndex: r?.Index);
     }
 
     /// <inheritdoc />
@@ -140,7 +142,7 @@ public sealed class PolicyEngine : IPolicy
                 _ when Names.AsFeature(n) is Feature f && !e.FeatureSet.Contains(f) => $"feature {Names.Snake(f)} not enabled for this chat",
                 _ => null,
             };
-            if (why is not null) return e.Deny(why);
+            if (why is not null) return e.Deny(why) with { Missing = n };
         }
         return e;
     }

@@ -22,20 +22,20 @@ public sealed class DownloadMediaTool
         {
             var target = await _c.Chats.ResolveAsync(chat, token).ConfigureAwait(false);
             var d = _c.Policy.Check(target.Info, Need.Read, Need.MediaDownload);
-            if (!d.Allowed) return ToolOutcome.Denied(d, target.Id);
+            if (!d.Allowed) return _c.Deny(d, target);
             var m = await _c.Telegram.GetMessageAsync(target.Id, messageId, token).ConfigureAwait(false);
             if (m is null) return ToolOutcome.Failed("message not found", target.Id, d.Rule);
-            if (!d.DateOk(m.Date, _c.Time.GetUtcNow())) return ToolOutcome.Denied(d.Deny("older than SinceDays"), target.Id);
-            if (!d.TopicOk(m.TopicId)) return ToolOutcome.Denied(d.Deny("message is outside allowed topics"), target.Id);
+            if (!d.DateOk(m.Date, _c.Time.GetUtcNow())) return _c.Deny(d.Deny("older than SinceDays"), target, DenialKind.TooOld);
+            if (!d.TopicOk(m.TopicId)) return _c.Deny(d.Deny("message is outside allowed topics"), target, DenialKind.Topic, m.TopicId);
             if (m.Media is not TgMedia media) return ToolOutcome.Failed("message has no media", target.Id, d.Rule);
 
             var cap = _c.Policy.Config.MaxMediaMb * 1024L * 1024L;
-            if (media.Size <= 0) return ToolOutcome.Denied(d.Deny("file size unknown; refusing (Limits__MaxMediaMb)"), target.Id);
-            if (media.Size > cap) return ToolOutcome.Denied(d.Deny($"file is {media.Size} bytes, over Limits__MaxMediaMb={_c.Policy.Config.MaxMediaMb}"), target.Id);
+            if (media.Size <= 0) return ToolOutcome.Refused("file size is unknown, so it is refused (TGMCP_Limits__MaxMediaMb)", target.Id, d.Rule);
+            if (media.Size > cap) return ToolOutcome.Refused($"file is {media.Size} bytes, over TGMCP_Limits__MaxMediaMb={_c.Policy.Config.MaxMediaMb}", target.Id, d.Rule);
 
             var file = await _c.Telegram.DownloadFileAsync(media.FileId, token).ConfigureAwait(false);
             if (!file.Completed || file.LocalPath is null) return ToolOutcome.Failed("download did not complete", target.Id, d.Rule);
-            if (file.Size > cap) return ToolOutcome.Denied(d.Deny("downloaded file is over Limits__MaxMediaMb"), target.Id);
+            if (file.Size > cap) return ToolOutcome.Refused("downloaded file is over TGMCP_Limits__MaxMediaMb", target.Id, d.Rule);
             var path = await _store.StoreAsync(file.LocalPath, target.Id, m.Id, media.FileName, token).ConfigureAwait(false);
             var payload = new
             {

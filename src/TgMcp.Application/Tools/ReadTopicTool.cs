@@ -17,8 +17,8 @@ public sealed class ReadTopicTool
             if (topicId < 1) throw new ArgumentException("topic_id must be positive", nameof(topicId));
             var target = await _c.Chats.ResolveAsync(chat, token).ConfigureAwait(false);
             var d = _c.Policy.Check(target.Info, Need.Read);
-            if (!d.Allowed) return ToolOutcome.Denied(d, target.Id);
-            if (!d.TopicOk(topicId)) return ToolOutcome.Denied(d.Deny($"topic {topicId} not in Topics"), target.Id);
+            if (!d.Allowed) return _c.Deny(d, target);
+            if (!d.TopicOk(topicId)) return _c.Deny(d.Deny($"topic {topicId} not in Topics"), target, DenialKind.Topic, topicId);
             // Topic history may not tag every message with a topic id; the requested topic is authoritative here.
             var scoped = d with { Topics = null };
             var (kept, _) = await MessageCollector.CollectAsync(
