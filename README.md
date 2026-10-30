@@ -4,7 +4,7 @@ An [MCP](https://modelcontextprotocol.io) server that gives an AI assistant such
 
 You decide, per chat, what the assistant may read, how far back, in which forum topics, and whether it may search or download media. Everything else is denied. Every call is written to an audit log.
 
-> **Status: 0.1.0, read-only.** Write tools (drafts, sending, reactions) are planned for a later version.
+> **Status: 0.1.0.** Read tools, plus `send_message` with owner-approved drafts or direct sending. More write tools (reactions, editing) are planned.
 
 ## Why
 
@@ -44,9 +44,10 @@ TgMcp is a third-party Telegram client built on TDLib with **your own** `api_id`
 | `get_message` | read | Denied if the message is older than `sinceDays` or outside `topics`. |
 | `search_chat` | read + `search` | Text search in one chat. |
 | `search_all` | read + `search` | Global search. Results from chats without read + search are silently dropped. |
+| `send_message` | `features.send` + the chat's `write` mode | Sends **as the owner's real account**. With `"write": "on"` the message is sent and the tool waits for Telegram's confirmation. With `"draft"` nothing is sent: a draft is saved for `tgmcp approve <id>`. With `"off"` the call is denied. Plain text up to 4096 characters, link previews off, optional `reply_to_message_id`, `topic_id` and `disable_notification`. `topics` restrict where it may post. `limits.sendsPerMinute` applies per chat. |
 | `download_media` | read + `media_download` | Size-capped by `limits.maxMediaMb`. Files of unknown size are refused. Files go to `media.dir` (default `/data/media`) and are deleted after `limits.mediaRetentionDays`. |
 
-Each message is returned as `{chat, id, date_utc, sender, from_me, text, has_media}`. The `chat` argument takes a numeric chat id (as shown by `list_chats`) or a public `@username`.
+Each message is returned as `{chat, id, date_utc, sender, from_me, text, has_media}`. `send_message` returns `{status: "sent", chat, message_id, date_utc}` or `{status: "draft", draft_id, chat, message}`. The text being sent is never written to the audit log, only its length. The `chat` argument takes a numeric chat id (as shown by `list_chats`) or a public `@username`.
 
 ### Denial messages
 
@@ -59,6 +60,22 @@ Topic 9 of Chat -1009876543210 ("Forum") is not allowed. To allow it add 9 to "t
 ```
 
 Only data already resolved for the call is shown: the id, the title and the first username. A chat hit by a **deny** rule is a deliberate hard block, so the client only sees `denied by policy`, with no id, rule or hint. The audit record never contains titles or text, only the rule label and a short reason.
+
+### Sending and drafts
+
+`"write": "draft"` is the safe mode. The assistant writes the message and TgMcp stores it in `/data/drafts`, one file per draft with owner-only permissions (0600). You review drafts and send or drop them:
+
+```sh
+tgmcp drafts                 # list: id, created, chat, first 80 characters
+tgmcp approve <id>           # send it as you, then delete the draft
+tgmcp reject <id>            # delete it without sending
+```
+
+With Docker, use the same env file and volumes as the server, e.g. `docker run --rm --env-file /etc/tgmcp/tgmcp.env -v /etc/tgmcp/tgmcp.json:/config/tgmcp.json:ro -v tgmcp-data:/data tgmcp:<sha> approve 1a2b3c4d`.
+
+`approve` checks the policy again, so a chat that is now denied or has `"write": "off"` won't be sent to. It is audited like a tool call.
+
+**Only one process may use the TDLib database at a time.** Once the MCP server has handled a call, it holds the database lock for its data directory. Stop or disconnect it (in Claude Code: `/mcp`) before `approve` or `login`. If the database is locked, the command fails with "the TDLib database is in use by another tgmcp process" instead of hanging. `drafts` and `reject` don't need TDLib and work at any time.
 
 ## Quick start
 
@@ -96,7 +113,7 @@ docker build -t tgmcp:dev .
 
 The server starts and answers `tools/list` even before login or without credentials. Tool calls then return a clear error, such as `not logged in: the owner must run tgmcp login first`.
 
-Commands: `serve` (the default), `login`, `config check [file]`, `help`. The `drafts`, `approve` and `reject` commands are reserved for the write-tools version.
+Commands: `serve` (the default), `login`, `config check [file]`, `drafts`, `approve <id>`, `reject <id>`, `help`.
 
 ## Configuration
 
@@ -134,6 +151,7 @@ The template [`tgmcp.example.jsonc`](tgmcp.example.jsonc) documents every option
 | `limits.maxMessagesPerCall` | integer ≥ 1 | `200` |
 | `limits.ratePerMinute` | integer ≥ 1 (one token bucket per process) | `30` |
 | `limits.maxMediaMb` | integer ≥ 1 | `50` |
+| `limits.sendsPerMinute` | integer ≥ 1. `send_message` calls per chat per minute, sent or drafted. | `10` |
 | `limits.mediaRetentionDays` | integer ≥ 0. Media older than this is deleted at startup and before each download. `0` keeps files forever. | `7` |
 | `media.dir` | absolute path where `download_media` stores files | `/data/media` |
 | `media.hostDir` | absolute host path of `media.dir`. If set, results also include `host_path`. This is pure string mapping, and nothing on the host is accessed. | none |
@@ -197,7 +215,7 @@ Image: `mcr.microsoft.com/dotnet/runtime:11.0.0-rc.3`, framework-dependent publi
 
 ## Limitations
 
-- Read-only. There are no write tools yet, so `write` modes are parsed and reported but have no effect.
+- `send_message` sends plain text only, with no formatting, media or polls. Other write features (`react`, `edit_own`, `delete_own`, `forward`, `pin`, `mark_read`) are reserved.
 - The policy is read once at start. Reconnect the MCP server after editing it.
 - `summarize` and `translate` are reserved. They will probably need Telegram Premium server-side features.
 - Login supports phone, code and 2FA password only. Email-code login, registering a new account and QR login aren't supported. Log in with an official app first if Telegram asks for these.

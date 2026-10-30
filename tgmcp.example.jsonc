@@ -56,10 +56,10 @@
     "read": true,           // read messages (read_messages, read_topic, get_message, list_chats details)
     "search": true,         // search_chat, search_all
     "mediaDownload": false, // download_media
+    "send": false,          // send_message: writing AS YOU, as drafts or directly (see "write" per chat)
     // Reserved for later versions (accepted and validated, currently without effect):
     "summarize": false,
     "translate": false,
-    "send": false,          // writing in any form (drafts or sending)
     "react": false,
     "markRead": false,
     "editOwn": false,
@@ -71,7 +71,7 @@
   // Used for chats that match no rule in "chats", and for keys a rule leaves out.
   "defaults": {
     "read": false,          // true = every chat not denied becomes readable (not recommended)
-    "write": "off",         // "off" | "draft" | "on"  (write tools: later version)
+    "write": "off",         // "off" | "draft" (you approve each message: `tgmcp approve <id>`) | "on" (sent at once)
     "features": [],         // per-chat features: "search", "media_download" (+ reserved: "summarize",
                             // "translate", "react", "mark_read", "edit_own", "delete_own", "forward", "pin")
     "sinceDays": null,      // hide messages older than N days; null = no limit
@@ -85,7 +85,9 @@
   // Optional "name" / "note": free text for humans and `config check`; never used for matching.
   // Permission keys (all optional, missing = taken from "defaults"):
   //   "read" (bool), "write" ("off"|"draft"|"on"), "features" (list), "sinceDays" (number >= 1),
-  //   "topics" (list of forum topic ids; empty or missing = all topics)
+  //   "topics" (list of forum topic ids; empty or missing = all topics; also limits where messages may be sent)
+  // "write" needs "features.send": true. Messages are sent from YOUR account; "draft" is the safe choice:
+  // the assistant only saves a draft and you send it yourself with `tgmcp approve <id>` (or `tgmcp reject <id>`).
   // An empty list is valid:  "chats": []  (then only "defaults" apply).
   "chats": [
     // Read-only access to one group by id.
@@ -101,9 +103,9 @@
     // (media download also needs "features.mediaDownload": true above)
     { "username": "example_friend", "name": "Friend", "read": true, "features": ["search", "media_download"], "sinceDays": 30 },
 
-    // LATER VERSION: drafts the owner approves before sending. Parsed and shown by `config check`,
-    // but there are no write tools yet, so this has no effect today.
-    { "id": -1001111111111, "name": "Team chat (drafts later)", "read": true, "write": "draft" },
+    // The assistant may propose messages here; nothing is sent until you run `tgmcp approve <id>`.
+    // (needs "features.send": true above)
+    { "id": -1001111111111, "name": "Team chat (drafts)", "read": true, "write": "draft" },
   ],
 
   // Hard blocks. ALWAYS win over "chats" and "defaults". Exactly one selector per rule:
@@ -122,6 +124,7 @@
     "maxMessagesPerCall": 200,   // messages returned per call, >= 1
     "ratePerMinute": 30,         // tool calls per minute for the whole server, >= 1
     "maxMediaMb": 50,            // largest file download_media will fetch, >= 1
+    "sendsPerMinute": 10,        // send_message calls (sent or drafted) per chat per minute, >= 1
     "mediaRetentionDays": 7,     // delete downloaded media older than N days; 0 = keep forever
   },
 

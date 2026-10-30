@@ -5,6 +5,14 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `send_message`: plain-text messages as the owner. `"write": "on"` sends and waits for Telegram's
+  confirmation; `"draft"` saves an owner-only draft in `/data/drafts`; `"off"` is denied with a JSON hint.
+  Topics restrict where messages may go; `limits.sendsPerMinute` (default 10) limits sends per chat;
+  only the text length is audited.
+- Owner commands `drafts`, `approve <id>` (re-checks the policy, sends, deletes) and `reject <id>`.
+- A clear error when another tgmcp process holds the TDLib database lock.
+
 ### Fixed
 - Empty JSON arrays (`"deny": []`, `"chats": []`, empty `features`/`topics`) are accepted as "no entries"
   instead of making the config invalid.
