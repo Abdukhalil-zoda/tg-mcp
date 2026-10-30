@@ -68,6 +68,12 @@ public static class Denials
                 ? $"{who} is not allowed to be read: {rule} has \"read\": false. To grant read access set \"read\": true in that rule."
                 : $"{who} is not allowed. To grant read-only access add to \"chats\": {Snippet(chat, "\"read\": true")}";
         }
+        if (d.Missing is Need.Write or Need.WriteOn)
+        {
+            return rule is not null
+                ? $"{who} may not be written to: {rule} has \"write\": \"off\". To allow it set \"write\": \"draft\" (the owner approves each message) or \"write\": \"on\" (sent immediately) in that rule."
+                : $"{who} may not be written to. To allow drafts the owner approves, add to \"chats\": {Snippet(chat, "\"write\": \"draft\"")} (or \"write\": \"on\" to send immediately)";
+        }
         if (Names.AsFeature(d.Missing.Value) is Feature f)
         {
             var name = Names.Snake(f);

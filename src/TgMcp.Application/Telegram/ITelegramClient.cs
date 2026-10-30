@@ -57,6 +57,24 @@ public sealed record TgFile(int Id, long Size, string? LocalPath, bool Completed
 /// <param name="NextOffset">Offset of the next page; empty when there are no more results.</param>
 public sealed record TgPage(IReadOnlyList<TgMessage> Messages, string NextOffset);
 
+/// <summary>A plain-text message to send.</summary>
+/// <param name="ChatId">Target chat.</param>
+/// <param name="Text">Plain text (no markup parsing), at most <see cref="MaxLength"/> characters.</param>
+/// <param name="ReplyToMessageId">Message to reply to (0 = none).</param>
+/// <param name="TopicId">Forum topic to post into (null = none).</param>
+/// <param name="DisableNotification">Send silently.</param>
+public sealed record OutgoingMessage(long ChatId, string Text, long ReplyToMessageId, int? TopicId, bool DisableNotification)
+{
+    /// <summary>Telegram's limit for one text message.</summary>
+    public const int MaxLength = 4096;
+}
+
+/// <summary>A message Telegram confirmed as sent.</summary>
+/// <param name="ChatId">Chat id.</param>
+/// <param name="MessageId">Final message id.</param>
+/// <param name="Date">Server date (UTC).</param>
+public sealed record TgSent(long ChatId, long MessageId, DateTimeOffset Date);
+
 /// <summary>Telegram is not usable right now (no credentials, not logged in, closed).</summary>
 /// <param name="message">Reason, safe to show to the client.</param>
 public sealed class TelegramUnavailableException(string message) : Exception(message);
@@ -105,6 +123,12 @@ public interface ITelegramClient
 
     /// <summary>Downloads a whole file into the TDLib files directory and waits for completion.</summary>
     Task<TgFile> DownloadFileAsync(int fileId, CancellationToken ct);
+
+    /// <summary>
+    /// Sends a plain-text message as the account owner and waits until Telegram confirms it
+    /// (temporary id replaced by the final one). Throws <see cref="TelegramCallException"/> on failure or timeout.
+    /// </summary>
+    Task<TgSent> SendMessageAsync(OutgoingMessage message, CancellationToken ct);
 
     /// <summary>Chat folder title to the ids of the chats currently in that folder.</summary>
     Task<IReadOnlyDictionary<string, IReadOnlySet<long>>> GetFolderChatsAsync(CancellationToken ct);

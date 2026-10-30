@@ -12,6 +12,9 @@ const string Usage = """
       login           log in to Telegram interactively (owner only, needs a TTY)
       config check [file]
                       print the effective policy and exit (non-zero if invalid); never contacts Telegram
+      drafts          list drafts waiting for approval
+      approve <id>    send a draft as the owner, then delete it (stop the MCP server first: one TDLib process per data dir)
+      reject <id>     delete a draft without sending it
       help            show this text
 
     The policy comes from the JSON file at TGMCP_ConfigFile (default /config/tgmcp.json),
@@ -28,8 +31,7 @@ switch (command)
     case "config" when args.Length > 1 && args[1] == "check":
         return ConfigCheckCommand.Run(Environment.GetEnvironmentVariables(), args.Length > 2 ? args[2] : null, Console.Out);
     case "drafts" or "approve" or "reject":
-        await Console.Error.WriteLineAsync($"'{command}' is not in this version (planned together with write tools).").ConfigureAwait(false);
-        return 2;
+        return await DraftCommandsCli.RunAsync(command, args.Length > 1 ? args[1] : null, Console.Out, CancellationToken.None).ConfigureAwait(false);
     case "help" or "--help" or "-h":
         Console.Out.WriteLine(Usage);
         return 0;
@@ -45,7 +47,7 @@ static async Task<int> ServeAsync(string[] rest)
     Console.SetOut(Console.Error);
 
     var builder = Composition.CreateBuilder(rest);
-    builder.Services.AddReadTools();
+    builder.Services.AddTelegramTools();
     builder.Services
         .AddMcpServer(o => o.ServerInfo = new() { Name = "tgmcp", Version = typeof(Composition).Assembly.GetName().Version?.ToString(3) ?? "0.1.0" })
         .WithStreamServerTransport(Console.OpenStandardInput(), stdout)

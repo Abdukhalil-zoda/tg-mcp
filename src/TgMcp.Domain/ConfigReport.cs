@@ -48,6 +48,7 @@ public static class ConfigReport
         yield return ("limits:listChats", "limits.listChats", Names.Snake(c.ListChats));
         yield return ("limits:maxMessagesPerCall", "limits.maxMessagesPerCall", c.MaxMessagesPerCall.ToString(CultureInfo.InvariantCulture));
         yield return ("limits:ratePerMinute", "limits.ratePerMinute", c.RatePerMinute.ToString(CultureInfo.InvariantCulture));
+        yield return ("limits:sendsPerMinute", "limits.sendsPerMinute", c.SendsPerMinute.ToString(CultureInfo.InvariantCulture));
         yield return ("limits:maxMediaMb", "limits.maxMediaMb", c.MaxMediaMb.ToString(CultureInfo.InvariantCulture));
         yield return ("limits:mediaRetentionDays", "limits.mediaRetentionDays", c.MediaRetentionDays == 0 ? "0 (keep forever)" : c.MediaRetentionDays.ToString(CultureInfo.InvariantCulture));
         yield return ("media:dir", "media.dir", c.MediaDir ?? "{dataDir}/media");
@@ -63,7 +64,7 @@ public static class ConfigReport
         var parts = new List<string>
         {
             $"read={(read ? "true" : "false")}{Gate(read, GlobalSwitch.Read)}",
-            $"write={Names.Snake(write)}{Gate(write != WriteMode.Off, GlobalSwitch.Send)} (write tools are not in this version)",
+            $"write={Names.Snake(write)}{Gate(write != WriteMode.Off, GlobalSwitch.Send)}",
         };
         var f = feats.Select(x => Names.Snake(x) + Gate(true, Enum.Parse<GlobalSwitch>(x.ToString()))).Order(StringComparer.Ordinal).ToList();
         parts.Add($"features=[{string.Join(", ", f)}]");

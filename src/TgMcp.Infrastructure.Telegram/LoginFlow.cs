@@ -63,6 +63,11 @@ public sealed class LoginFlow
         await using (session.ConfigureAwait(false))
         {
             var state = await session.WaitSettledAsync(TimeSpan.FromSeconds(60), ct).ConfigureAwait(false);
+            if (session.ParametersError is string paramsError)
+            {
+                _console.Say($"cannot log in: {TdTelegramClient.DatabaseProblem(paramsError)}");
+                return 2;
+            }
             while (!ct.IsCancellationRequested)
             {
                 try

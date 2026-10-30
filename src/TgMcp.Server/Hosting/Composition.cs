@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Console;
 using TgMcp.Application;
 using TgMcp.Application.Audit;
+using TgMcp.Application.Drafts;
 using TgMcp.Application.Telegram;
 using TgMcp.Application.Tools;
 using TgMcp.Domain;
@@ -55,8 +56,8 @@ public static class Composition
         return builder;
     }
 
-    /// <summary>Registers the read tools and their pipeline.</summary>
-    public static IServiceCollection AddReadTools(this IServiceCollection services)
+    /// <summary>Registers the tools, drafts and their pipeline.</summary>
+    public static IServiceCollection AddTelegramTools(this IServiceCollection services)
     {
         services.AddSingleton<IAuditSink, JsonlAuditSink>();
         services.AddSingleton<IRateLimiter>(sp => new TokenBucket(sp.GetRequiredService<IPolicy>().Config.RatePerMinute, sp.GetRequiredService<TimeProvider>()));
@@ -74,6 +75,10 @@ public static class Composition
         services.AddSingleton<SearchChatTool>();
         services.AddSingleton<SearchAllTool>();
         services.AddSingleton<DownloadMediaTool>();
+        services.AddSingleton<ISendLimiter>(sp => new PerChatRateLimiter(sp.GetRequiredService<IPolicy>().Config.SendsPerMinute, sp.GetRequiredService<TimeProvider>()));
+        services.AddSingleton<IDraftStore, FileDraftStore>();
+        services.AddSingleton<SendMessageTool>();
+        services.AddSingleton<DraftCommands>();
         services.AddHostedService<StartupAudit>();
         services.AddHostedService<MediaCleanupOnStart>();
         return services;

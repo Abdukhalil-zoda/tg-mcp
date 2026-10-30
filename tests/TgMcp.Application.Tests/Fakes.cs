@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using TgMcp.Application.Audit;
+using TgMcp.Application.Drafts;
 using TgMcp.Application.Telegram;
 using TgMcp.Application.Tools;
 using TgMcp.Domain;
@@ -94,6 +95,17 @@ internal sealed class FakeTelegram : ITelegramClient
         return Task.FromResult(new TgFile(fileId, DownloadedSize >= 0 ? DownloadedSize : media.Size, $"/tdlib/files/{fileId}", true));
     }
 
+    public List<OutgoingMessage> Sent { get; } = [];
+    public TelegramCallException? SendFailure { get; set; }
+
+    public Task<TgSent> SendMessageAsync(OutgoingMessage message, CancellationToken ct)
+    {
+        Calls++;
+        if (SendFailure is not null) throw SendFailure;
+        Sent.Add(message);
+        return Task.FromResult(new TgSent(message.ChatId, 1000 + Sent.Count, Harness.Now));
+    }
+
     public Task<IReadOnlyDictionary<string, IReadOnlySet<long>>> GetFolderChatsAsync(CancellationToken ct)
     {
         Calls++;
@@ -139,6 +151,23 @@ internal sealed class MemoryMediaStore : IMediaStore
     }
 }
 
+internal sealed class MemoryDraftStore : IDraftStore
+{
+    private int _next;
+    public Dictionary<string, Draft> Drafts { get; } = [];
+
+    public Task<Draft> SaveAsync(string chatTitle, OutgoingMessage message, CancellationToken ct)
+    {
+        var d = new Draft($"{++_next:x8}", Harness.Now, chatTitle, message);
+        Drafts[d.Id] = d;
+        return Task.FromResult(d);
+    }
+
+    public Task<IReadOnlyList<Draft>> ListAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<Draft>>([.. Drafts.Values]);
+    public Task<Draft?> GetAsync(string id, CancellationToken ct) => Task.FromResult(Drafts.GetValueOrDefault(id));
+    public Task<bool> DeleteAsync(string id, CancellationToken ct) => Task.FromResult(Drafts.Remove(id));
+}
+
 /// <summary>Wires the real use cases to fakes.</summary>
 internal sealed class Harness
 {
@@ -166,6 +195,10 @@ internal sealed class Harness
     public SearchChatTool SearchChat => new(Context);
     public SearchAllTool SearchAll => new(Context);
     public MemoryMediaStore Media { get; } = new();
+    public MemoryDraftStore DraftStore { get; } = new();
+    private ISendLimiter? _sendLimiter;
+    public SendMessageTool Send => new(Context, DraftStore, _sendLimiter ??= new PerChatRateLimiter(Policy.Config.SendsPerMinute, Time));
+    public DraftCommands DraftCommands => new(DraftStore, Context, Audit);
     public DownloadMediaTool Download => new(Context, Media);
 
     public AuditEntry LastAudit => Audit.Entries[^1];

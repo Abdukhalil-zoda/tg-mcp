@@ -136,6 +136,9 @@ public sealed class PolicyConfig
     /// <summary>limits.mediaRetentionDays: downloaded media older than this is deleted (0 = keep forever).</summary>
     public int MediaRetentionDays { get; private set; } = 7;
 
+    /// <summary>limits.sendsPerMinute: messages (sent or drafted) per chat per minute.</summary>
+    public int SendsPerMinute { get; private set; } = 10;
+
     /// <summary>media.dir: directory for downloaded media (null = {DataDir}/media).</summary>
     public string? MediaDir { get; private set; }
 
@@ -349,6 +352,7 @@ public sealed class PolicyConfig
                         case "maxmessagespercall": MaxMessagesPerCall = Positive(key, value) ?? MaxMessagesPerCall; break;
                         case "rateperminute": RatePerMinute = Positive(key, value) ?? RatePerMinute; break;
                         case "maxmediamb": MaxMediaMb = Positive(key, value) ?? MaxMediaMb; break;
+                        case "sendsperminute": SendsPerMinute = Positive(key, value) ?? SendsPerMinute; break;
                         case "mediaretentiondays": MediaRetentionDays = NonNegative(key, value) ?? MediaRetentionDays; break;
                         default: Unknown(key); break;
                     }
@@ -554,7 +558,7 @@ public sealed class PolicyConfig
         foreach (var r in Chats)
             sb.Append($"{r.Label} read={r.Read?.ToString().ToLowerInvariant() ?? "-"} write={(r.Write is WriteMode w ? Names.Snake(w) : "-")} features={F(r.Features)} since_days={r.SinceDays?.ToString(CultureInfo.InvariantCulture) ?? "-"} topics={(r.Topics is null ? "-" : string.Join(",", r.Topics.Order()))}\n");
         foreach (var d in Denies) sb.Append($"{d.Label}\n");
-        sb.Append($"limits list_chats={Names.Snake(ListChats)} max_messages_per_call={MaxMessagesPerCall} rate_per_minute={RatePerMinute} max_media_mb={MaxMediaMb} media_retention_days={MediaRetentionDays}\n");
+        sb.Append($"limits list_chats={Names.Snake(ListChats)} max_messages_per_call={MaxMessagesPerCall} rate_per_minute={RatePerMinute} max_media_mb={MaxMediaMb} media_retention_days={MediaRetentionDays} sends_per_minute={SendsPerMinute}\n");
         return sb.ToString();
     }
 

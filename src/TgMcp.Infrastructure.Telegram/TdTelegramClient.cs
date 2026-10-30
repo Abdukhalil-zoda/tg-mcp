@@ -16,6 +16,7 @@ public sealed class TdTelegramClient : ITelegramClient, IAsyncDisposable
 {
     private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan SendConfirmTimeout = TimeSpan.FromSeconds(60);
 
     private readonly TelegramOptions _o;
     private readonly TimeProvider _time;
@@ -54,6 +55,11 @@ public sealed class TdTelegramClient : ITelegramClient, IAsyncDisposable
             }
             var session = new TdSession(_o, _time, _log);
             var state = await session.WaitSettledAsync(StartTimeout, ct).ConfigureAwait(false);
+            if (session.ParametersError is string paramsError)
+            {
+                await session.DisposeAsync().ConfigureAwait(false);
+                throw new TelegramUnavailableException(DatabaseProblem(paramsError));
+            }
             if (state is not AuthorizationStateReady)
             {
                 await session.DisposeAsync().ConfigureAwait(false);
@@ -198,6 +204,33 @@ public sealed class TdTelegramClient : ITelegramClient, IAsyncDisposable
             result[title] = ids;
         }
         return result;
+    }
+
+    /// <summary>Turns a TDLib parameters error into an owner-facing explanation.</summary>
+    public static string DatabaseProblem(string tdError) =>
+        tdError.Contains("lock", StringComparison.OrdinalIgnoreCase) || tdError.Contains("already in use", StringComparison.OrdinalIgnoreCase)
+            ? "the TDLib database is in use by another tgmcp process for this data directory (only one may run at a time: stop or disconnect the MCP server before `tgmcp login` / `tgmcp approve`, or the other way round)"
+            : $"TDLib could not open its database: {tdError}";
+
+    /// <inheritdoc />
+    public async Task<TgSent> SendMessageAsync(OutgoingMessage message, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        var request = new SendMessage
+        {
+            ChatId = message.ChatId,
+            TopicId = message.TopicId is int t ? new MessageTopic.MessageTopicForum { ForumTopicId = t } : null,
+            ReplyTo = message.ReplyToMessageId > 0 ? new InputMessageReplyTo.InputMessageReplyToMessage { MessageId = message.ReplyToMessageId } : null,
+            Options = new MessageSendOptions { DisableNotification = message.DisableNotification },
+            InputMessageContent = new InputMessageContent.InputMessageText
+            {
+                Text = new FormattedText { Text = message.Text, Entities = [] },
+                LinkPreviewOptions = new LinkPreviewOptions { IsDisabled = true },
+                ClearDraft = false,
+            },
+        };
+        var sent = await S.SendAndConfirmAsync(request, SendConfirmTimeout, ct).ConfigureAwait(false);
+        return new TgSent(sent.ChatId, sent.Id, DateTimeOffset.FromUnixTimeSeconds(sent.Date));
     }
 
     private async Task<TgChat> MapChat(Chat chat, CancellationToken ct)

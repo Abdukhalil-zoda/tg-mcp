@@ -6,7 +6,7 @@ using TgMcp.Application.Tools;
 namespace TgMcp.Server.Mcp;
 
 /// <summary>
-/// The MCP tool surface (read-only). Every call is checked against the owner's policy and audited.
+/// The MCP tool surface. Every call is checked against the owner's policy and audited.
 /// Deliberately absent: payments, bot buttons, account settings, joining/leaving/deleting chats,
 /// admin actions, contact export and bulk operations.
 /// </summary>
@@ -22,11 +22,13 @@ public sealed class TelegramTools
     private readonly SearchChatTool _searchChat;
     private readonly SearchAllTool _searchAll;
     private readonly DownloadMediaTool _download;
+    private readonly SendMessageTool _send;
 
     /// <summary>Created per call by the MCP host.</summary>
     public TelegramTools(ListChatsTool list, ReadMessagesTool read, ReadTopicTool topic, GetMessageTool get,
-        SearchChatTool searchChat, SearchAllTool searchAll, DownloadMediaTool download)
+        SearchChatTool searchChat, SearchAllTool searchAll, DownloadMediaTool download, SendMessageTool send)
     {
+        _send = send;
         _list = list;
         _read = read;
         _topic = topic;
@@ -102,6 +104,20 @@ public sealed class TelegramTools
         [Description("Message id with the media.")] long message_id,
         CancellationToken cancellationToken = default) =>
         Map(await _download.RunAsync(chat, message_id, cancellationToken).ConfigureAwait(false));
+
+    /// <summary>send_message.</summary>
+    [McpServerTool(Name = "send_message", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true)]
+    [Description("Send a plain-text Telegram message AS THE OWNER'S REAL ACCOUNT: recipients see it as written by the owner. " +
+        "Depending on the owner's policy for the chat it is sent immediately, or saved as a draft that the owner must approve " +
+        "(the result says which). Use only when the owner asked for this message.")]
+    public async Task<CallToolResult> SendMessage(
+        [Description("Chat id (e.g. -1001234567890) or @username.")] string chat,
+        [Description("Plain text, 1-4096 characters. No markup is parsed; link previews are disabled.")] string text,
+        [Description("Reply to this message id (0 = not a reply).")] long reply_to_message_id = 0,
+        [Description("Forum topic id to post into (0 = none).")] int topic_id = 0,
+        [Description("Send without a notification sound.")] bool disable_notification = false,
+        CancellationToken cancellationToken = default) =>
+        Map(await _send.RunAsync(chat, text, reply_to_message_id, topic_id, disable_notification, cancellationToken).ConfigureAwait(false));
 
     private static CallToolResult Map(ToolResult r) => new()
     {
