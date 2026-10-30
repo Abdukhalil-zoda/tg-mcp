@@ -2,80 +2,54 @@ using System.Reflection;
 using Microsoft.Extensions.Logging;
 using TdLib;
 using TdLib.Bindings;
+using TgMcp.Application.Telegram;
 using static TdLib.TdApi;
 using static TdLib.TdApi.AuthorizationState;
 
-namespace TgMcp.Telegram;
-
-public sealed class TelegramOptions
-{
-    public int ApiId { get; init; }
-    public string ApiHash { get; init; } = "";
-    /// <summary>TDLib database encryption key (never logged).</summary>
-    public byte[] DatabaseKey { get; init; } = [];
-    public string DataDir { get; init; } = "/data";
-    public string DatabaseDir => Path.Combine(DataDir, "tdlib");
-    public string FilesDir => Path.Combine(DataDir, "files");
-    public string MediaDir => Path.Combine(DataDir, "media");
-    public TimeSpan RequestTimeout { get; init; } = TimeSpan.FromSeconds(30);
-
-    /// <summary>Null if usable, else why not (no values included).</summary>
-    public string? Problem()
-    {
-        if (ApiId <= 0 || string.IsNullOrWhiteSpace(ApiHash)) return "TGMCP_ApiId/TGMCP_ApiHash not set (owner must provide api.env)";
-        if (DatabaseKey.Length == 0) return "TGMCP_DatabaseKey / TGMCP_DatabaseKeyFile not set";
-        return null;
-    }
-
-    /// <summary>Reads TGMCP_ApiId, TGMCP_ApiHash, TGMCP_DatabaseKey or TGMCP_DatabaseKeyFile, TGMCP_DataDir.</summary>
-    public static TelegramOptions FromValues(Func<string, string?> get)
-    {
-        _ = int.TryParse(get("ApiId"), out var apiId);
-        var key = get("DatabaseKey");
-        byte[] keyBytes = [];
-        if (!string.IsNullOrEmpty(key)) keyBytes = System.Text.Encoding.UTF8.GetBytes(key);
-        else if (get("DatabaseKeyFile") is { Length: > 0 } path && File.Exists(path))
-            keyBytes = System.Text.Encoding.UTF8.GetBytes(File.ReadAllText(path).Trim());
-        return new TelegramOptions
-        {
-            ApiId = apiId,
-            ApiHash = get("ApiHash") ?? "",
-            DatabaseKey = keyBytes,
-            DataDir = get("DataDir") is { Length: > 0 } d ? d : "/data",
-        };
-    }
-}
+namespace TgMcp.Infrastructure.Telegram;
 
 /// <summary>
-/// Owns one TdClient: low log verbosity (stderr only), automatic SetTdlibParameters, authorization-state
-/// tracking and chat-folder tracking from the single update stream. Requests map to Task&lt;T&gt; via
-/// TdClient.ExecuteAsync, wrapped with timeout + FLOOD_WAIT retry.
+/// Owns one TdClient: low log verbosity (TDLib logs go to stderr, never stdout), automatic
+/// SetTdlibParameters, and authorization-state and chat-folder tracking from the single update stream.
+/// Requests map to <see cref="Task{T}"/> through TdClient.ExecuteAsync, wrapped with timeout and
+/// bounded FLOOD_WAIT retry.
 /// </summary>
-public sealed class TdSession : IAsyncDisposable
+public sealed partial class TdSession : IAsyncDisposable
 {
     private readonly TelegramOptions _o;
     private readonly ILogger _log;
+    private readonly TimeProvider _time;
     private readonly TdClient _client;
     private readonly Lock _lock = new();
     private AuthorizationState? _state;
     private TaskCompletionSource _changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private volatile ChatFolderInfo[] _folders = [];
-    private volatile bool _foldersKnown;
+    private ChatFolderInfo[] _folders = [];
+    private bool _foldersKnown;
 
-    public TdSession(TelegramOptions options, ILogger log)
+    /// <summary>Creates the TDLib client (no network traffic until the first request).</summary>
+    public TdSession(TelegramOptions options, TimeProvider time, ILogger log)
     {
-        _o = options;
+        _o = options ?? throw new ArgumentNullException(nameof(options));
+        _time = time;
         _log = log;
         var bindings = Interop.AutoDetectBindings();
-        bindings.SetLogVerbosityLevel(TdLogLevel.Error); // 1; TDLib logs to stderr, never stdout
+        bindings.SetLogVerbosityLevel(TdLogLevel.Error); // level 1, before the client exists
         _client = new TdClient(bindings);
         _client.Execute(new SetLogVerbosityLevel { NewVerbosityLevel = 1 });
         _client.UpdateReceived += OnUpdate;
     }
 
-    public AuthorizationState? State { get { lock (_lock) return _state; } }
-    public IReadOnlyList<ChatFolderInfo> Folders => _folders;
-    public bool FoldersKnown => _foldersKnown;
+    /// <summary>Latest authorization state (null before the first update).</summary>
+    public AuthorizationState? State
+    {
+        get { lock (_lock) return _state; }
+    }
+
+    /// <summary>Chat folders from the last updateChatFolders, or null if none was received yet.</summary>
+    public IReadOnlyList<ChatFolderInfo>? Folders
+    {
+        get { lock (_lock) return _foldersKnown ? _folders : null; }
+    }
 
     private void OnUpdate(object? sender, Update u)
     {
@@ -85,8 +59,11 @@ public sealed class TdSession : IAsyncDisposable
                 SetState(a.AuthorizationState);
                 break;
             case Update.UpdateChatFolders f:
-                _folders = f.ChatFolders ?? [];
-                _foldersKnown = true;
+                lock (_lock)
+                {
+                    _folders = f.ChatFolders ?? [];
+                    _foldersKnown = true;
+                }
                 break;
         }
     }
@@ -100,7 +77,7 @@ public sealed class TdSession : IAsyncDisposable
             old = _changed;
             _changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
         }
-        _log.LogInformation("tdlib authorization state: {State}", s.GetType().Name);
+        LogState(s.GetType().Name);
         if (s is AuthorizationStateWaitTdlibParameters) _ = SendParametersAsync();
         old.TrySetResult();
     }
@@ -116,91 +93,108 @@ public sealed class TdSession : IAsyncDisposable
                 UseTestDc = false,
                 DatabaseDirectory = _o.DatabaseDir,
                 FilesDirectory = _o.FilesDir,
-                DatabaseEncryptionKey = _o.DatabaseKey,
+                DatabaseEncryptionKey = _o.ResolveDatabaseKey(),
                 UseFileDatabase = true,
                 UseChatInfoDatabase = true,
                 UseMessageDatabase = true,
                 UseSecretChats = false,
-                ApiId = _o.ApiId,
+                ApiId = _o.ParsedApiId,
                 ApiHash = _o.ApiHash,
                 SystemLanguageCode = "en",
                 DeviceModel = "TgMcp",
                 SystemVersion = "Linux",
-                ApplicationVersion = "TgMcp " + (Assembly.GetEntryAssembly()?.GetName().Version?.ToString(3) ?? "0.1.0"),
+                ApplicationVersion = "TgMcp " + (typeof(TdSession).Assembly.GetName().Version?.ToString(3) ?? "0"),
             }).ConfigureAwait(false);
         }
         catch (TdException e)
         {
-            _log.LogError("SetTdlibParameters failed: {Code} {Message}", e.Error?.Code, e.Error?.Message);
+            LogParamsFailed(e.Error?.Code ?? 0, e.Error?.Message ?? "unknown");
+        }
+        catch (IOException e)
+        {
+            LogParamsFailed(0, e.Message);
         }
     }
 
-    /// <summary>Waits until the authorization state is no longer WaitTdlibParameters/null (or timeout).</summary>
+    /// <summary>Activates the client and waits until it leaves WaitTdlibParameters (or the timeout passes).</summary>
     public async Task<AuthorizationState?> WaitSettledAsync(TimeSpan timeout, CancellationToken ct)
     {
-        // Kick the client so it emits its first update, and learn the current state.
-        try { SetStateIfNone(await _client.ExecuteAsync(new GetAuthorizationState()).WaitAsync(timeout, ct).ConfigureAwait(false)); }
-        catch (TdException) { }
-        catch (TimeoutException) { return State; }
-        var deadline = DateTime.UtcNow + timeout;
-        while (true)
+        try
         {
-            Task wait;
-            lock (_lock)
-            {
-                if (_state is not null and not AuthorizationStateWaitTdlibParameters) return _state;
-                wait = _changed.Task;
-            }
-            var left = deadline - DateTime.UtcNow;
-            if (left <= TimeSpan.Zero) return State;
-            try { await wait.WaitAsync(left, ct).ConfigureAwait(false); }
-            catch (TimeoutException) { return State; }
+            var current = await _client.ExecuteAsync(new GetAuthorizationState()).WaitAsync(timeout, _time, ct).ConfigureAwait(false);
+            bool none;
+            lock (_lock) none = _state is null;
+            if (none) SetState(current);
         }
+        catch (TdException)
+        {
+            // The update stream will deliver the state.
+        }
+        catch (TimeoutException)
+        {
+            return State;
+        }
+        return await WaitChangeAsync(null, timeout, ct).ConfigureAwait(false);
     }
 
-    /// <summary>Waits for the next authorization state change (login flow).</summary>
+    /// <summary>Waits until the state differs from <paramref name="from"/> and is not WaitTdlibParameters.</summary>
     public async Task<AuthorizationState?> WaitChangeAsync(AuthorizationState? from, TimeSpan timeout, CancellationToken ct)
     {
-        var deadline = DateTime.UtcNow + timeout;
+        var deadline = _time.GetUtcNow() + timeout;
         while (true)
         {
             Task wait;
             lock (_lock)
             {
-                if (!ReferenceEquals(_state, from) && _state is not AuthorizationStateWaitTdlibParameters) return _state;
+                if (_state is not null && !ReferenceEquals(_state, from) && _state is not AuthorizationStateWaitTdlibParameters) return _state;
                 wait = _changed.Task;
             }
-            var left = deadline - DateTime.UtcNow;
+            var left = deadline - _time.GetUtcNow();
             if (left <= TimeSpan.Zero) return State;
-            try { await wait.WaitAsync(left, ct).ConfigureAwait(false); }
-            catch (TimeoutException) { return State; }
+            try
+            {
+                await wait.WaitAsync(left, _time, ct).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                return State;
+            }
         }
     }
 
-    private void SetStateIfNone(AuthorizationState s)
-    {
-        bool set;
-        lock (_lock) set = _state is null;
-        if (set) SetState(s);
-    }
-
-    /// <summary>One request with timeout and bounded FLOOD_WAIT retry. TDLib errors become TelegramCallException.</summary>
-    public Task<T> CallAsync<T>(Function<T> f, CancellationToken ct) where T : TdApi.Object =>
+    /// <summary>One request with timeout and bounded FLOOD_WAIT retry; TDLib errors become <see cref="TelegramCallException"/>.</summary>
+    public Task<T> CallAsync<T>(Function<T> function, CancellationToken ct, TimeSpan? timeout = null) where T : TdApi.Object =>
         Retry.RunAsync(async _ =>
         {
-            try { return await _client.ExecuteAsync(f).ConfigureAwait(false); }
-            catch (TdException e) { throw new TelegramCallException(e.Error?.Code ?? 0, e.Error?.Message ?? "unknown"); }
-        }, new RetryOptions(_o.RequestTimeout), ct);
+            try
+            {
+                return await _client.ExecuteAsync(function).ConfigureAwait(false);
+            }
+            catch (TdException e)
+            {
+                throw new TelegramCallException(e.Error?.Code ?? 0, e.Error?.Message ?? "unknown");
+            }
+        }, new RetryOptions(timeout ?? _o.RequestTimeout), _time, ct);
 
+    /// <summary>Closes TDLib gracefully and releases the native client.</summary>
     public async ValueTask DisposeAsync()
     {
         _client.UpdateReceived -= OnUpdate;
         try
         {
             if (State is not (null or AuthorizationStateClosed))
-                await _client.ExecuteAsync(new Close()).WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                await _client.ExecuteAsync(new Close()).WaitAsync(TimeSpan.FromSeconds(5), _time).ConfigureAwait(false);
         }
-        catch (Exception) { /* closing anyway */ }
+        catch (Exception e) when (e is TdException or TimeoutException)
+        {
+            // Closing anyway.
+        }
         _client.Dispose();
     }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "TDLib authorization state: {State}")]
+    private partial void LogState(string state);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "SetTdlibParameters failed: {Code} {Message}")]
+    private partial void LogParamsFailed(int code, string message);
 }

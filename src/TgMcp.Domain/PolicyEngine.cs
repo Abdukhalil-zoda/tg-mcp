@@ -15,8 +15,11 @@ public interface IPolicy
     /// <summary>Full decision for a call needing <paramref name="needs"/> in <paramref name="chat"/>.</summary>
     Decision Check(ChatInfo chat, params Need[] needs);
 
-    /// <summary>Global (chat-independent) gate: master switch + global feature switches.</summary>
+    /// <summary>Global (chat-independent) gate: valid config, master switch, global switches, folder resolution.</summary>
     Decision CheckGlobal(params Need[] needs);
+
+    /// <summary>Like <see cref="CheckGlobal"/> but ignores folder resolution (used before contacting Telegram).</summary>
+    Decision CheckSwitches(params Need[] needs);
 
     /// <summary>Decision to show in list_chats, or null if the chat must stay hidden.</summary>
     Decision? Listing(ChatInfo chat);
@@ -76,7 +79,7 @@ public sealed class PolicyEngine : IPolicy
     /// <inheritdoc />
     public string? GlobalDenyReason()
     {
-        if (!Config.IsValid) return $"config invalid ({Config.Errors.Count} error(s): {string.Join("; ", Config.Errors.Take(3))})";
+        if (!Config.IsValid) return ConfigProblem();
         if (!Config.Enabled) return "TGMCP_Enabled is not true";
         if (NeedsFolders && _folderError is not null) return $"folder deny unresolved, failing closed: {_folderError}";
         return null;
@@ -85,7 +88,17 @@ public sealed class PolicyEngine : IPolicy
     /// <inheritdoc />
     public Decision CheckGlobal(params Need[] needs)
     {
-        if (GlobalDenyReason() is string why) return new Decision(false, "global", why);
+        var d = CheckSwitches(needs);
+        if (!d.Allowed) return d;
+        return GlobalDenyReason() is string why ? new Decision(false, "global", why) : d;
+    }
+
+    /// <inheritdoc />
+    public Decision CheckSwitches(params Need[] needs)
+    {
+        ArgumentNullException.ThrowIfNull(needs);
+        if (!Config.IsValid) return new Decision(false, "global", ConfigProblem());
+        if (!Config.Enabled) return new Decision(false, "global", "TGMCP_Enabled is not true");
         foreach (var n in needs)
         {
             var sw = Names.Switch(n);
@@ -141,6 +154,9 @@ public sealed class PolicyEngine : IPolicy
         if (Config.ListChats == ListChatsMode.AllowedOnly && !Check(chat, Need.Read).Allowed) return null;
         return e;
     }
+
+    private string ConfigProblem() =>
+        $"config invalid ({Config.Errors.Count} error(s): {string.Join("; ", Config.Errors.Take(3))})";
 
     private bool Matches(Selector s, ChatInfo chat) => s.Kind switch
     {
