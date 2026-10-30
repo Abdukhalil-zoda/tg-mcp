@@ -52,7 +52,7 @@ public class ToolTests
         h.Telegram.Add(Friend, Msg(111, 1, "x"));
         var r = await h.Read.RunAsync("111", 10, 0, Ct);
         Assert.True(r.IsError);
-        Assert.Contains("TGMCP_Enabled", r.Text, StringComparison.Ordinal);
+        Assert.Contains("\"enabled\" is not true", r.Text, StringComparison.Ordinal);
         Assert.Equal(0, h.Telegram.ReadyCalls);
         Assert.Equal(0, h.Telegram.Calls);
         Assert.False(h.LastAudit.Allowed);
@@ -85,7 +85,7 @@ public class ToolTests
         h.Telegram.Add(Friend, Msg(111, 1, "hello"));
         var r = await h.SearchChat.RunAsync("111", "hello", 10, 0, Ct);
         Assert.True(r.IsError);
-        Assert.Contains("TGMCP_Features__Search", r.Text, StringComparison.Ordinal);
+        Assert.Contains("\"features.search\" is off", r.Text, StringComparison.Ordinal);
         Assert.Equal(0, h.Telegram.Calls);
     }
 
@@ -135,7 +135,7 @@ public class ToolTests
         var r = await h.Read.RunAsync("111", 10, 0, Ct);
         Assert.True(r.IsError);
         Assert.Contains("Chat 111", r.Text, StringComparison.Ordinal);
-        Assert.Contains("TGMCP_Chats__0__Read=true", r.Text, StringComparison.Ordinal);
+        Assert.Contains("rule chats[0] has \"read\": false", r.Text, StringComparison.Ordinal);
         Assert.Equal("read=false", h.LastAudit.Reason);
         Assert.Equal(111, h.LastAudit.ChatId);
         Assert.False(h.LastAudit.Allowed);
@@ -193,14 +193,22 @@ public class ToolTests
     // ------------------------------------------------------------- actionable denials
 
     [Fact]
-    public async Task Unmatched_chat_gets_a_rule_hint_with_the_next_free_index()
+    public async Task Unmatched_chat_gets_a_json_rule_snippet()
     {
         var h = H(("Chats__0__Id", "-100444"), ("Chats__0__Read", "true"), ("Chats__7__Id", "-100999"), ("Chats__7__Read", "true"));
         var r = await h.Read.RunAsync("@friend", 10, 0, Ct);
         Assert.True(r.IsError);
-        Assert.Equal("Chat 111 (\"Friend\", @friend) is not allowed. To grant read-only access add: TGMCP_Chats__8__Id=111 and TGMCP_Chats__8__Read=true", r.Text);
+        Assert.Equal("Chat 111 (\"Friend\", @friend) is not allowed. To grant read-only access add to \"chats\": { \"id\": 111, \"name\": \"Friend\", \"read\": true }", r.Text);
         Assert.Equal("defaults", h.LastAudit.Rule);
         Assert.DoesNotContain("Friend", h.LastAudit.Reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Hint_refers_to_the_rule_by_its_human_name()
+    {
+        var h = H(("Chats__0__Id", "111"), ("Chats__0__Name", "Best friend"), ("Chats__0__Read", "false"));
+        var r = await h.Read.RunAsync("111", 10, 0, Ct);
+        Assert.Contains("rule chats[0] (\"Best friend\") has \"read\": false", r.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -208,7 +216,7 @@ public class ToolTests
     {
         var h = H(("Chats__0__Id", "-100222"), ("Chats__0__Read", "true"), ("Chats__0__Features", "search"));
         var r = await h.Download.RunAsync("-100222", 14, Ct);
-        Assert.Contains("TGMCP_Chats__0__Features=media_download,search", r.Text, StringComparison.Ordinal);
+        Assert.Contains("set \"features\": [\"media_download\", \"search\"] in rule chats[0]", r.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -216,7 +224,7 @@ public class ToolTests
     {
         var h = H(("Defaults__Read", "true"));
         var r = await h.SearchChat.RunAsync("111", "hello", 10, 0, Ct);
-        Assert.Contains("TGMCP_Chats__0__Id=111, TGMCP_Chats__0__Read=true and TGMCP_Chats__0__Features=search", r.Text, StringComparison.Ordinal);
+        Assert.Contains("add to \"chats\": { \"id\": 111, \"name\": \"Friend\", \"read\": true, \"features\": [\"search\"] }", r.Text, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -244,7 +252,7 @@ public class ToolTests
         var h = H(("Defaults__Read", "true"), ("Defaults__SinceDays", "7"));
         var r = await h.Get.RunAsync("111", 1, Ct);
         Assert.Contains("7-day limit for Chat 111", r.Text, StringComparison.Ordinal);
-        Assert.Contains("TGMCP_Defaults__SinceDays", r.Text, StringComparison.Ordinal);
+        Assert.Contains("\"defaults.sinceDays\"", r.Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -255,7 +263,7 @@ public class ToolTests
         var r = await h.Read.RunAsync("111", 10, 0, Ct);
         Assert.True(r.IsError);
         Assert.DoesNotContain("Finance", r.Text, StringComparison.Ordinal);
-        Assert.Contains("TGMCP_Deny__N__Folder", r.Text, StringComparison.Ordinal);
+        Assert.Contains("\"folder\" rules in \"deny\"", r.Text, StringComparison.Ordinal);
     }
 
     // ------------------------------------------------------------- read_topic
@@ -267,7 +275,7 @@ public class ToolTests
         var denied = await h.Topic.RunAsync("-100222", 9, 10, 0, Ct);
         Assert.True(denied.IsError);
         Assert.Contains("Topic 9", denied.Text, StringComparison.Ordinal);
-        Assert.Contains("TGMCP_Chats__0__Topics", denied.Text, StringComparison.Ordinal);
+        Assert.Contains("add 9 to \"topics\" in rule chats[0]", denied.Text, StringComparison.Ordinal);
         Assert.Equal(new long[] { 15L, 14L, 13L, 11L }, Ids(await h.Topic.RunAsync("-100222", 5, 10, 0, Ct)));
     }
 
@@ -293,7 +301,7 @@ public class ToolTests
         var h = H(("Chats__0__Id", "111"), ("Chats__0__Read", "true"), ("Chats__0__SinceDays", "7"),
                   ("Chats__1__Id", "-100222"), ("Chats__1__Read", "true"), ("Chats__1__Topics", "5"));
         Assert.Equal(new long[] { 2L }, Ids(await h.Get.RunAsync("111", 2, Ct)));
-        Assert.Contains("SinceDays", (await h.Get.RunAsync("111", 1, Ct)).Text, StringComparison.Ordinal);
+        Assert.Contains("\"sinceDays\" in rule chats[0]", (await h.Get.RunAsync("111", 1, Ct)).Text, StringComparison.Ordinal);
         Assert.Contains("Topic 9 of Chat -100222", (await h.Get.RunAsync("-100222", 12, Ct)).Text, StringComparison.Ordinal);
         Assert.Equal(new long[] { 11L }, Ids(await h.Get.RunAsync("-100222", 11, Ct)));
         var missing = await h.Get.RunAsync("111", 999, Ct);
@@ -317,7 +325,7 @@ public class ToolTests
         var r = await h.SearchChat.RunAsync("111", "hello", 10, 0, Ct);
         Assert.True(r.IsError);
         Assert.Contains("'search' feature", r.Text, StringComparison.Ordinal);
-        Assert.Contains("TGMCP_Chats__0__Features=search", r.Text, StringComparison.Ordinal);
+        Assert.Contains("\"features\": [\"search\"] in rule chats[0]", r.Text, StringComparison.Ordinal);
 
         var ok = H(("Chats__0__Id", "111"), ("Chats__0__Read", "true"), ("Chats__0__Features", "search"));
         Assert.Equal(new long[] { 2L, 1L }, Ids(await ok.SearchChat.RunAsync("111", "hello", 10, 0, Ct)));
@@ -384,7 +392,7 @@ public class ToolTests
     public async Task Download_media_enforces_size_cap_before_downloading()
     {
         var h = H(("Chats__0__Id", "-100222"), ("Chats__0__Read", "true"), ("Chats__0__Features", "media_download"));
-        Assert.Contains("Limits__MaxMediaMb", (await h.Download.RunAsync("-100222", 13, Ct)).Text, StringComparison.Ordinal);
+        Assert.Contains("limits.maxMediaMb", (await h.Download.RunAsync("-100222", 13, Ct)).Text, StringComparison.Ordinal);
         Assert.Contains("size is unknown", (await h.Download.RunAsync("-100222", 15, Ct)).Text, StringComparison.Ordinal);
         Assert.Empty(h.Telegram.Downloads);
     }
@@ -461,7 +469,7 @@ public class ToolTests
         var h = H(("Limits__ListChats", "off"), ("Defaults__Read", "true"));
         var r = await h.ListChats.RunAsync(100, Ct);
         Assert.True(r.IsError);
-        Assert.Contains("Limits__ListChats=off", r.Text, StringComparison.Ordinal);
+        Assert.Contains("\"limits.listChats\" is \"off\"", r.Text, StringComparison.Ordinal);
         Assert.Equal(0, h.Telegram.Calls);
     }
 

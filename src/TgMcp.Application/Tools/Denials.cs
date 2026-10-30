@@ -38,48 +38,60 @@ public static class Denials
                 return HardDeny;
             case DecisionSource.Global when d.Reason.StartsWith("folder deny", StringComparison.Ordinal):
                 // Do not echo which folders exist or are denied.
-                return $"{HardDeny}: chat folder deny rules could not be evaluated, so everything is denied (the operator must check the TGMCP_Deny__N__Folder rules)";
+                return $"{HardDeny}: chat folder deny rules could not be evaluated, so everything is denied (the operator must check the \"folder\" rules in \"deny\")";
             case DecisionSource.Global or DecisionSource.Limits:
                 return $"{HardDeny}: {d.Reason}";
         }
         if (chat is null) return $"{HardDeny}: {d.Reason}";
 
         var who = Describe(chat);
-        var k = d.RuleIndex;
-        var n = NextIndex(config);
+        var rule = d.RuleIndex is int k ? RuleRef(config, k) : null;
         return kind switch
         {
-            DenialKind.TooOld => k is int i
-                ? $"The message is older than the {d.SinceDays}-day limit for {who}. To widen it change TGMCP_Chats__{i}__SinceDays."
-                : $"The message is older than the {d.SinceDays}-day limit for {who}. To widen it change TGMCP_Defaults__SinceDays or add a rule TGMCP_Chats__{n}__Id={chat.Id} with its own SinceDays.",
-            DenialKind.Topic => k is int i
+            DenialKind.TooOld => rule is not null
+                ? $"The message is older than the {d.SinceDays}-day limit for {who}. To widen it change \"sinceDays\" in {rule}."
+                : $"The message is older than the {d.SinceDays}-day limit for {who}. To widen it change \"defaults.sinceDays\", or add a rule for this chat to \"chats\" with its own \"sinceDays\".",
+            DenialKind.Topic => rule is not null
                 ? (topicId is int t
-                    ? $"Topic {t} of {who} is not allowed. To allow it add {t} to TGMCP_Chats__{i}__Topics."
-                    : $"The message is outside the allowed topics of {who} (TGMCP_Chats__{i}__Topics).")
+                    ? $"Topic {t} of {who} is not allowed. To allow it add {t} to \"topics\" in {rule}."
+                    : $"The message is outside the allowed \"topics\" of {who} ({rule}).")
                 : $"The message is outside the allowed topics of {who}.",
-            _ => Permission(d, chat, who, k, n),
+            _ => Permission(d, chat, who, rule),
         };
     }
 
-    private static string Permission(Decision d, TgChat chat, string who, int? k, int n)
+    private static string Permission(Decision d, TgChat chat, string who, string? rule)
     {
         if (d.Missing is Need.Read or null)
         {
-            return k is int i
-                ? $"{who} is not allowed to be read (rule TGMCP_Chats__{i} has Read off). To grant read-only access set: TGMCP_Chats__{i}__Read=true"
-                : $"{who} is not allowed. To grant read-only access add: TGMCP_Chats__{n}__Id={chat.Id} and TGMCP_Chats__{n}__Read=true";
+            return rule is not null
+                ? $"{who} is not allowed to be read: {rule} has \"read\": false. To grant read access set \"read\": true in that rule."
+                : $"{who} is not allowed. To grant read-only access add to \"chats\": {Snippet(chat, "\"read\": true")}";
         }
         if (Names.AsFeature(d.Missing.Value) is Feature f)
         {
             var name = Names.Snake(f);
-            if (k is int i)
+            if (rule is not null)
             {
-                var list = string.Join(",", d.FeatureSet.Append(f).Select(Names.Snake).Distinct().Order(StringComparer.Ordinal));
-                return $"{who} does not have the '{name}' feature. To grant it set: TGMCP_Chats__{i}__Features={list}";
+                var list = string.Join(", ", d.FeatureSet.Append(f).Select(Names.Snake).Distinct().Order(StringComparer.Ordinal).Select(x => $"\"{x}\""));
+                return $"{who} does not have the '{name}' feature. To grant it set \"features\": [{list}] in {rule}.";
             }
-            return $"{who} does not have the '{name}' feature. To grant it add: TGMCP_Chats__{n}__Id={chat.Id}, TGMCP_Chats__{n}__Read=true and TGMCP_Chats__{n}__Features={name}";
+            return $"{who} does not have the '{name}' feature. To grant it add to \"chats\": {Snippet(chat, $"\"read\": true, \"features\": [\"{name}\"]")}";
         }
         return $"{who} is not allowed: {d.Reason}";
+    }
+
+    /// <summary>A ready-to-paste rule: <c>{ "id": -100123, "name": "Title", ... }</c>.</summary>
+    private static string Snippet(TgChat chat, string rest)
+    {
+        var name = string.IsNullOrEmpty(chat.Title) ? "" : $", \"name\": {JsonSerializer.Serialize(chat.Title, Quote)}";
+        return $"{{ \"id\": {chat.Id}{name}, {rest} }}";
+    }
+
+    private static string RuleRef(PolicyConfig config, int index)
+    {
+        var r = config.Chats.FirstOrDefault(c => c.Index == index);
+        return r?.Name is string n ? $"rule chats[{index}] ({JsonSerializer.Serialize(n, Quote)})" : $"rule chats[{index}]";
     }
 
     /// <summary>"Chat -100123 ("Title", @name)", using only data already resolved.</summary>
@@ -90,12 +102,5 @@ public static class Denials
         if (!string.IsNullOrEmpty(chat.Title)) parts.Add(JsonSerializer.Serialize(chat.Title, Quote));
         if (chat.Usernames is [var u, ..]) parts.Add("@" + u);
         return parts.Count == 0 ? $"Chat {chat.Id}" : $"Chat {chat.Id} ({string.Join(", ", parts)})";
-    }
-
-    /// <summary>The next free <c>Chats__N</c> index (after all existing rules).</summary>
-    public static int NextIndex(PolicyConfig config)
-    {
-        ArgumentNullException.ThrowIfNull(config);
-        return config.Chats.Count == 0 ? 0 : config.Chats.Max(r => r.Index) + 1;
     }
 }

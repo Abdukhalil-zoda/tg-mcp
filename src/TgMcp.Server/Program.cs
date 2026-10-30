@@ -10,10 +10,12 @@ const string Usage = """
 
       serve           run the MCP server on stdio (default)
       login           log in to Telegram interactively (owner only, needs a TTY)
-      config check    print the effective policy and exit (non-zero if invalid); never contacts Telegram
+      config check [file]
+                      print the effective policy and exit (non-zero if invalid); never contacts Telegram
       help            show this text
 
-    Configuration comes only from TGMCP_* environment variables. See README.md.
+    The policy comes from the JSON file at TGMCP_ConfigFile (default /config/tgmcp.json),
+    overridden by TGMCP_* environment variables. Secrets are environment-only. See README.md.
     """;
 
 var command = args.Length == 0 ? "serve" : args[0].ToLowerInvariant();
@@ -24,7 +26,7 @@ switch (command)
     case "login":
         return await LoginAsync().ConfigureAwait(false);
     case "config" when args.Length > 1 && args[1] == "check":
-        return ConfigCheckCommand.Run(Composition.LoadConfiguration(), Console.Out);
+        return ConfigCheckCommand.Run(Environment.GetEnvironmentVariables(), args.Length > 2 ? args[2] : null, Console.Out);
     case "drafts" or "approve" or "reject":
         await Console.Error.WriteLineAsync($"'{command}' is not in this version (planned together with write tools).").ConfigureAwait(false);
         return 2;

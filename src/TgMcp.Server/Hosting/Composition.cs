@@ -12,13 +12,9 @@ using TgMcp.Infrastructure.Telegram;
 
 namespace TgMcp.Server.Hosting;
 
-/// <summary>Builds hosts whose only configuration source is TGMCP_ environment variables and whose logs go to stderr.</summary>
+/// <summary>Builds hosts configured from the JSON policy file and TGMCP_ environment variables, with logs on stderr.</summary>
 public static class Composition
 {
-    /// <summary>Configuration from TGMCP_* environment variables only ("__" nests sections).</summary>
-    public static IConfigurationRoot LoadConfiguration() =>
-        new ConfigurationBuilder().AddEnvironmentVariables(PolicyConfig.Prefix).Build();
-
     /// <summary>A host builder with config, stderr logging, options and the policy registered.</summary>
     public static HostApplicationBuilder CreateBuilder(string[] args)
     {
@@ -42,13 +38,19 @@ public static class Composition
         builder.Services.AddOptions<ServerOptions>().Bind(builder.Configuration)
             .Validate(o => Path.IsPathRooted(o.DataDir) && Path.IsPathRooted(o.EffectiveAuditPath), "TGMCP_DataDir and TGMCP_AuditPath must be absolute paths")
             .ValidateOnStart();
-        builder.Services.AddOptions<TelegramOptions>().Bind(builder.Configuration)
-            .Validate(o => Path.IsPathRooted(o.DataDir) && Path.IsPathRooted(o.EffectiveMediaDir), "TGMCP_DataDir and TGMCP_MediaDir must be absolute paths")
-            .Validate(o => string.IsNullOrWhiteSpace(o.MediaHostDir) || o.MediaHostDir.StartsWith('/'), "TGMCP_MediaHostDir must be an absolute path")
-            .ValidateOnStart();
-
-        var config = PolicyConfig.Parse(builder.Configuration.AsEnumerable());
+        var loaded = PolicyConfigLoader.Load(Environment.GetEnvironmentVariables());
+        var config = loaded.Policy;
+        builder.Services.AddSingleton(loaded);
         builder.Services.AddSingleton(config);
+        builder.Services.AddOptions<TelegramOptions>().Bind(builder.Configuration)
+            .PostConfigure(o =>
+            {
+                // media.dir / media.hostDir come from the validated policy (file or env).
+                o.MediaDir = config.MediaDir;
+                o.MediaHostDir = config.MediaHostDir;
+            })
+            .Validate(o => Path.IsPathRooted(o.DataDir), "TGMCP_DataDir must be an absolute path")
+            .ValidateOnStart();
         builder.Services.AddSingleton<IPolicy>(sp => new PolicyEngine(sp.GetRequiredService<PolicyConfig>()));
         return builder;
     }

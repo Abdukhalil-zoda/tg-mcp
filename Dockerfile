@@ -10,7 +10,7 @@ FROM ${SDK_IMAGE} AS build
 WORKDIR /src
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
 # Restore first for layer caching.
-COPY global.json Directory.Build.props Directory.Packages.props TgMcp.slnx .editorconfig tgmcp.env.example ./
+COPY global.json Directory.Build.props Directory.Packages.props TgMcp.slnx .editorconfig tgmcp.example.jsonc ./
 COPY src/TgMcp.Domain/TgMcp.Domain.csproj src/TgMcp.Domain/
 COPY src/TgMcp.Application/TgMcp.Application.csproj src/TgMcp.Application/
 COPY src/TgMcp.Infrastructure.Telegram/TgMcp.Infrastructure.Telegram.csproj src/TgMcp.Infrastructure.Telegram/

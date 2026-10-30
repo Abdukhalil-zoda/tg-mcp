@@ -2,7 +2,7 @@ using TgMcp.Domain;
 
 namespace TgMcp.Application.Tools;
 
-/// <summary>list_chats: chats from the main list, filtered by Limits__ListChats.</summary>
+/// <summary>list_chats: chats from the main list, filtered by limits.listChats.</summary>
 public sealed class ListChatsTool
 {
     /// <summary>Upper bound for the limit argument.</summary>
@@ -19,7 +19,7 @@ public sealed class ListChatsTool
         {
             var mode = _c.Policy.Config.ListChats;
             if (mode == ListChatsMode.Off)
-                return _c.Deny(new Decision(false, "limits", "TGMCP_Limits__ListChats=off", Source: DecisionSource.Limits), null);
+                return _c.Deny(new Decision(false, "limits", "\"limits.listChats\" is \"off\"", Source: DecisionSource.Limits), null);
             var ids = await _c.Telegram.GetChatIdsAsync(Math.Clamp(limit, 1, MaxLimit), token).ConfigureAwait(false);
             var rows = new List<object>();
             foreach (var id in ids)

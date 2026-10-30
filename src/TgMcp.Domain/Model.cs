@@ -22,7 +22,7 @@ public enum ListChatsMode
     Off,
 }
 
-/// <summary>Chat kind used by <c>Deny__N__Type</c>.</summary>
+/// <summary>Chat kind used by the <c>"type"</c> deny selector.</summary>
 public enum ChatKind
 {
     /// <summary>Private chat with a person (also secret chats and Saved Messages).</summary>
@@ -60,7 +60,7 @@ public enum Feature
     Pin,
 }
 
-/// <summary>Global switches (<c>TGMCP_Features__X</c>). Read and Send gate reading/writing; the rest gate features.</summary>
+/// <summary>Global switches (<c>features.x</c> in the config file). Read and Send gate reading/writing; the rest gate features.</summary>
 public enum GlobalSwitch
 {
     /// <summary>Reading messages.</summary>
@@ -217,6 +217,13 @@ public static class Names
 
     /// <summary>snake_case name of a feature.</summary>
     public static string Snake(Feature f) => FeatureByName.First(kv => kv.Value == f).Key;
+
+    /// <summary>camelCase JSON name of a global switch, e.g. <c>mediaDownload</c>.</summary>
+    public static string Camel(GlobalSwitch s)
+    {
+        var n = s.ToString();
+        return char.ToLowerInvariant(n[0]) + n[1..];
+    }
 
     /// <summary>Env name of a write mode.</summary>
     public static string Snake(WriteMode m) => m switch

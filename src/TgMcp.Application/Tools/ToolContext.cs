@@ -11,7 +11,7 @@ namespace TgMcp.Application.Tools;
 /// <param name="Time">Clock.</param>
 public sealed record ToolContext(ToolRunner Runner, IPolicy Policy, ChatResolver Chats, ITelegramClient Telegram, TimeProvider Time)
 {
-    /// <summary>Clamps a requested count to [1, Limits__MaxMessagesPerCall].</summary>
+    /// <summary>Clamps a requested count to [1, limits.maxMessagesPerCall].</summary>
     public int ClampLimit(int requested) => Math.Clamp(requested, 1, Policy.Config.MaxMessagesPerCall);
 
     /// <summary>A denial outcome with an actionable (or, for Deny rules, opaque) message.</summary>

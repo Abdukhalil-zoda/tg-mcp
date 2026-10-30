@@ -24,7 +24,7 @@ public class ConfigTests
         Assert.Equal(7, c.MediaRetentionDays);
         var d = new PolicyEngine(c).Check(Friend, Need.Read);
         Assert.False(d.Allowed);
-        Assert.Contains("TGMCP_Enabled", d.Reason, StringComparison.Ordinal);
+        Assert.Contains("\"enabled\"", d.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -126,6 +126,47 @@ public class ConfigTests
     }
 
     [Fact]
+    public void Env_entries_override_file_entries_and_their_children()
+    {
+        var c = PolicyConfig.Parse(
+        [
+            new ConfigEntry("enabled", "true", ConfigOrigin.File),
+            new ConfigEntry("chats:0:id", "1", ConfigOrigin.File),
+            new ConfigEntry("chats:0:features:0", "search", ConfigOrigin.File),
+            new ConfigEntry("chats:0:features:1", "pin", ConfigOrigin.File),
+            new ConfigEntry("Chats:0:Features", "react", ConfigOrigin.Env),
+            new ConfigEntry("Enabled", "false", ConfigOrigin.Env),
+        ]);
+        Assert.True(c.IsValid, string.Join("; ", c.Errors));
+        Assert.False(c.Enabled);
+        Assert.Equal(new HashSet<Feature> { Feature.React }, c.Chats[0].Features);
+        Assert.Equal("env", c.SourceOf("enabled"));
+        Assert.Equal("file", c.SourceOf("chats:0:id"));
+    }
+
+    [Fact]
+    public void Errors_use_json_paths_for_file_keys_and_variable_names_for_env_keys()
+    {
+        var c = PolicyConfig.Parse(
+        [
+            new ConfigEntry("chats:1:id", "1", ConfigOrigin.File),
+            new ConfigEntry("chats:1:reed", "true", ConfigOrigin.File),
+            new ConfigEntry("Deny:3:Kind", "bot", ConfigOrigin.Env),
+        ]);
+        Assert.Contains("chats[1].reed: unknown key", c.Errors);
+        Assert.Contains("TGMCP_Deny__3__Kind: unknown key", c.Errors);
+        Assert.Contains(c.Errors, e => e.StartsWith("TGMCP_Deny__3: needs exactly one selector", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Load_error_makes_config_invalid()
+    {
+        var c = PolicyConfig.Parse([new ConfigEntry("Enabled", "true", ConfigOrigin.Env)], "config file /x.json: not found");
+        Assert.False(c.IsValid);
+        Assert.Contains("config file /x.json: not found", c.Errors);
+    }
+
+    [Fact]
     public void Master_switch_off_denies_even_with_rules()
     {
         var p = new PolicyEngine(PolicyConfig.FromPairs(("Enabled", "false"), ("Features__Read", "true"),
@@ -141,7 +182,7 @@ public class ConfigTests
             ("Chats__0__Id", "111"), ("Chats__0__Read", "true"), ("Chats__0__Features", "search")));
         var d = p.Check(Friend, Need.Read);
         Assert.False(d.Allowed);
-        Assert.Contains("TGMCP_Features__Read", d.Reason, StringComparison.Ordinal);
+        Assert.Contains("\"features.read\" is off", d.Reason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -164,7 +205,7 @@ public class ConfigTests
     public void Send_switch_gates_write()
     {
         var p = new PolicyEngine(PolicyConfig.FromPairs(("Enabled", "true"), ("Chats__0__Id", "111"), ("Chats__0__Write", "on")));
-        Assert.Contains("Send", p.Check(Friend, Need.Write).Reason, StringComparison.Ordinal);
+        Assert.Contains("features.send", p.Check(Friend, Need.Write).Reason, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -217,7 +258,7 @@ public class ConfigTests
             ("Chats__0__Id", "111"), ("Chats__0__Read", "true"), ("Chats__0__Features", "search"), ("Deny__0__Type", "bot"));
         var text = string.Join("\n", ConfigReport.Describe(c));
         Assert.Contains("chats[0] id=111", text, StringComparison.Ordinal);
-        Assert.Contains("search (inactive: global Search off)", text, StringComparison.Ordinal);
+        Assert.Contains("search (inactive: features.search is off)", text, StringComparison.Ordinal);
         Assert.Contains("deny[0] type=bot", text, StringComparison.Ordinal);
         Assert.Contains(c.Sha256, text, StringComparison.Ordinal);
     }

@@ -36,14 +36,32 @@ public sealed record Selector(SelectorKind Kind, string Value, long Id = 0, Chat
     };
 }
 
-/// <summary>A <c>Chats__N</c> rule; null permissions fall back to Defaults.</summary>
+/// <summary>Where a configuration value came from.</summary>
+public enum ConfigOrigin
+{
+    /// <summary>Built-in default.</summary>
+    Default,
+    /// <summary>The JSON config file.</summary>
+    File,
+    /// <summary>A TGMCP_ environment variable (overrides the file).</summary>
+    Env,
+}
+
+/// <summary>One flat configuration value.</summary>
+/// <param name="Key">IConfiguration-style key, ':' separated, original casing (e.g. <c>chats:0:id</c>).</param>
+/// <param name="Value">Raw value; null entries (sections, JSON null) are ignored.</param>
+/// <param name="Origin">File or environment.</param>
+public sealed record ConfigEntry(string Key, string? Value, ConfigOrigin Origin);
+
+/// <summary>A <c>chats[N]</c> rule; null permissions fall back to Defaults.</summary>
 /// <param name="Index">N.</param>
 /// <param name="Selector">The rule's selector.</param>
 /// <param name="Read">Read permission.</param>
 /// <param name="Write">Write mode.</param>
 /// <param name="Features">Per-chat features.</param>
 /// <param name="SinceDays">Maximum message age in days.</param>
-/// <param name="Topics">Allowed forum topic ids.</param>
+/// <param name="Topics">Allowed forum topic ids (null or empty = all topics).</param>
+/// <param name="Name">Optional human label (<c>name</c> or <c>note</c>); never used for matching.</param>
 public sealed record ChatRule(
     int Index,
     Selector Selector,
@@ -51,63 +69,78 @@ public sealed record ChatRule(
     WriteMode? Write,
     IReadOnlySet<Feature>? Features,
     int? SinceDays,
-    IReadOnlySet<int>? Topics)
+    IReadOnlySet<int>? Topics,
+    string? Name = null)
 {
     /// <summary>Label used in decisions and audit.</summary>
     public string Label => $"chats[{Index}] {Selector}";
 }
 
-/// <summary>A <c>Deny__N</c> rule. Deny always wins.</summary>
+/// <summary>A <c>deny[N]</c> rule. Deny always wins.</summary>
 /// <param name="Index">N.</param>
 /// <param name="Selector">The rule's selector.</param>
-public sealed record DenyRule(int Index, Selector Selector)
+/// <param name="Name">Optional human label; never used for matching.</param>
+public sealed record DenyRule(int Index, Selector Selector, string? Name = null)
 {
     /// <summary>Label used in decisions and audit.</summary>
     public string Label => $"deny[{Index}] {Selector}";
 }
 
 /// <summary>
-/// The effective configuration parsed from TGMCP_ environment keys (IConfiguration form, ':' separated,
-/// prefix already stripped). Any error makes the whole config invalid => everything is denied.
+/// The effective configuration, merged from the JSON config file and TGMCP_ environment variables
+/// (precedence: defaults &lt; file &lt; env). Keys are IConfiguration-style (':' separated).
+/// Any error makes the whole config invalid => everything is denied.
 /// </summary>
 public sealed class PolicyConfig
 {
     /// <summary>Environment variable prefix.</summary>
     public const string Prefix = "TGMCP_";
 
-    /// <summary>Non-policy keys the process itself reads. Their values are never logged or hashed.</summary>
+    /// <summary>Non-policy keys the process itself reads (environment only). Their values are never logged or hashed.</summary>
     public static readonly IReadOnlySet<string> RuntimeKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "ApiId", "ApiHash", "DatabaseKey", "DatabaseKeyFile", "AuditPath", "DataDir", "MediaDir", "MediaHostDir",
+        "ApiId", "ApiHash", "DatabaseKey", "DatabaseKeyFile", "AuditPath", "DataDir", "ConfigFile",
+    };
+
+    /// <summary>Secrets: refused in the config file.</summary>
+    public static readonly IReadOnlySet<string> SecretKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "ApiId", "ApiHash", "DatabaseKey",
     };
 
     /// <summary>Master switch (default false = deny all).</summary>
     public bool Enabled { get; private set; }
     /// <summary>Global switches that are on.</summary>
     public IReadOnlySet<GlobalSwitch> Switches => _switches;
-    /// <summary>Defaults__Read.</summary>
+    /// <summary>defaults.read.</summary>
     public bool DefaultRead { get; private set; }
-    /// <summary>Defaults__Write.</summary>
+    /// <summary>defaults.write.</summary>
     public WriteMode DefaultWrite { get; private set; } = WriteMode.Off;
-    /// <summary>Defaults__Features.</summary>
+    /// <summary>defaults.features.</summary>
     public IReadOnlySet<Feature> DefaultFeatures { get; private set; } = Names.NoFeatures;
-    /// <summary>Defaults__SinceDays.</summary>
+    /// <summary>defaults.sinceDays.</summary>
     public int? DefaultSinceDays { get; private set; }
     /// <summary>Chats rules ordered by N.</summary>
     public IReadOnlyList<ChatRule> Chats { get; private set; } = [];
     /// <summary>Deny rules ordered by N.</summary>
     public IReadOnlyList<DenyRule> Denies { get; private set; } = [];
-    /// <summary>Limits__ListChats.</summary>
+    /// <summary>limits.listChats.</summary>
     public ListChatsMode ListChats { get; private set; } = ListChatsMode.AllowedOnly;
-    /// <summary>Limits__MaxMessagesPerCall.</summary>
+    /// <summary>limits.maxMessagesPerCall.</summary>
     public int MaxMessagesPerCall { get; private set; } = 200;
-    /// <summary>Limits__RatePerMinute.</summary>
+    /// <summary>limits.ratePerMinute.</summary>
     public int RatePerMinute { get; private set; } = 30;
-    /// <summary>Limits__MaxMediaMb.</summary>
+    /// <summary>limits.maxMediaMb.</summary>
     public int MaxMediaMb { get; private set; } = 50;
 
-    /// <summary>Limits__MediaRetentionDays: downloaded media older than this is deleted (0 = keep forever).</summary>
+    /// <summary>limits.mediaRetentionDays: downloaded media older than this is deleted (0 = keep forever).</summary>
     public int MediaRetentionDays { get; private set; } = 7;
+
+    /// <summary>media.dir: directory for downloaded media (null = {DataDir}/media).</summary>
+    public string? MediaDir { get; private set; }
+
+    /// <summary>media.hostDir: host path of the media directory, for reporting only.</summary>
+    public string? MediaHostDir { get; private set; }
 
     /// <summary>Validation errors (key names, never secret values).</summary>
     public IReadOnlyList<string> Errors => _errors;
@@ -118,44 +151,158 @@ public sealed class PolicyConfig
 
     private readonly HashSet<GlobalSwitch> _switches = [];
     private readonly List<string> _errors = [];
+    private readonly Dictionary<string, ConfigEntry> _effective = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<ConfigEntry> _all = [];
 
     private PolicyConfig() { }
 
-    /// <summary>Raw environment (e.g. Environment.GetEnvironmentVariables()) -> config. Keys without the prefix are ignored.</summary>
-    public static PolicyConfig FromEnvironment(IDictionary env)
+    /// <summary>Entries from a raw environment (e.g. Environment.GetEnvironmentVariables()); keys without the prefix are ignored.</summary>
+    public static IReadOnlyList<ConfigEntry> EnvironmentEntries(IDictionary env)
     {
         ArgumentNullException.ThrowIfNull(env);
-        var list = new List<KeyValuePair<string, string?>>();
+        var list = new List<ConfigEntry>();
         foreach (DictionaryEntry e in env)
         {
             var k = e.Key?.ToString() ?? "";
             if (!k.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase)) continue;
-            list.Add(new(k[Prefix.Length..].Replace("__", ":"), e.Value?.ToString()));
+            list.Add(new(k[Prefix.Length..].Replace("__", ":", StringComparison.Ordinal), e.Value?.ToString(), ConfigOrigin.Env));
         }
-        return Parse(list);
+        return list;
     }
+
+    /// <summary>Environment-only config (no file).</summary>
+    public static PolicyConfig FromEnvironment(IDictionary env) => Parse(EnvironmentEntries(env));
 
     /// <summary>Test/CLI helper: (key, value) pairs in env form (<c>TGMCP_</c> prefix optional, <c>__</c> nesting).</summary>
     public static PolicyConfig FromPairs(params (string Key, string Value)[] pairs) =>
-        Parse(pairs is null ? [] : pairs.Select(p => new KeyValuePair<string, string?>(
-            (p.Key.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase) ? p.Key[Prefix.Length..] : p.Key).Replace("__", ":"),
-            p.Value)));
+        Parse(pairs is null ? [] : pairs.Select(p => new ConfigEntry(
+            (p.Key.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase) ? p.Key[Prefix.Length..] : p.Key).Replace("__", ":", StringComparison.Ordinal),
+            p.Value, ConfigOrigin.Env)));
 
-    /// <summary>Entries as produced by IConfiguration.AsEnumerable() (section keys with null values are skipped).</summary>
+    /// <summary>Entries as produced by IConfiguration.AsEnumerable(), all treated as environment values.</summary>
     public static PolicyConfig Parse(IEnumerable<KeyValuePair<string, string?>> entries)
     {
         ArgumentNullException.ThrowIfNull(entries);
+        return Parse(entries.Select(e => new ConfigEntry(e.Key, e.Value, ConfigOrigin.Env)));
+    }
+
+    /// <summary>
+    /// Merges file and environment entries (env overrides a file key and everything below it) and validates.
+    /// <paramref name="loadError"/> (e.g. "config file not found") makes the config invalid.
+    /// </summary>
+    public static PolicyConfig Parse(IEnumerable<ConfigEntry> entries, string? loadError = null)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
         var c = new PolicyConfig();
-        var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (key, value) in entries)
+        if (loadError is not null) c._errors.Add(loadError);
+        var ordered = entries.Where(e => e.Value is not null).OrderBy(e => e.Origin == ConfigOrigin.Env ? 1 : 0).ToList();
+        c._all.AddRange(ordered);
+        foreach (var e in ordered)
         {
-            if (value is null) continue;
-            if (!seen.TryAdd(key, value)) c._errors.Add($"{key}: duplicate key (differs only in case?)");
+            var segments = e.Key.Split(':');
+            if (e.Origin == ConfigOrigin.File && segments.Length == 1 && RuntimeKeys.Contains(segments[0]))
+            {
+                var name = RuntimeKeys.First(k => k.Equals(segments[0], StringComparison.OrdinalIgnoreCase));
+                c._errors.Add(SecretKeys.Contains(name)
+                    ? $"{e.Key}: secrets are not allowed in the config file; set {Prefix}{name} in the environment instead"
+                    : $"{e.Key}: only allowed as the environment variable {Prefix}{name}");
+                continue;
+            }
+            if (c._effective.TryGetValue(e.Key, out var prev) && prev.Origin == e.Origin)
+            {
+                c._errors.Add($"{e.Key}: duplicate key (differs only in case?)");
+                continue;
+            }
+            if (e.Origin == ConfigOrigin.Env)
+            {
+                var below = e.Key + ":";
+                foreach (var k in c._effective.Keys.Where(k => k.StartsWith(below, StringComparison.OrdinalIgnoreCase)).ToList())
+                    c._effective.Remove(k);
+            }
+            c._effective[e.Key] = e;
         }
-        c.Load(seen);
-        for (var i = 0; i < c._errors.Count; i++) c._errors[i] = EnvForm(c._errors[i]);
-        c.Sha256 = c.ComputeSha(seen);
+        var kv = CollapseLists(c._effective.Values);
+        c.Load(kv);
+        for (var i = 0; i < c._errors.Count; i++) c._errors[i] = c.Pretty(c._errors[i]);
+        c.Sha256 = c.ComputeSha(kv);
         return c;
+    }
+
+    /// <summary>JSON arrays of scalars (<c>features:0</c>, <c>topics:1</c>) become one comma-separated value.</summary>
+    private static Dictionary<string, string> CollapseLists(IEnumerable<ConfigEntry> entries)
+    {
+        var kv = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var lists = new Dictionary<string, SortedDictionary<int, string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var e in entries)
+        {
+            var i = e.Key.LastIndexOf(':');
+            if (i > 0 && int.TryParse(e.Key[(i + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out var idx))
+            {
+                var parent = e.Key[..i];
+                var leaf = parent[(parent.LastIndexOf(':') + 1)..];
+                if (leaf.Equals("features", StringComparison.OrdinalIgnoreCase) || leaf.Equals("topics", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!lists.TryGetValue(parent, out var items)) lists[parent] = items = [];
+                    items[idx] = e.Value!;
+                    continue;
+                }
+            }
+            kv[e.Key] = e.Value!;
+        }
+        foreach (var (parent, items) in lists) kv[parent] = string.Join(",", items.Values);
+        return kv;
+    }
+
+    /// <summary>Where the value at <paramref name="key"/> (or any value below it) came from: "file", "env", "file+env" or "default".</summary>
+    public string SourceOf(string key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        var below = key + ":";
+        var origins = _effective.Values
+            .Where(e => e.Key.Equals(key, StringComparison.OrdinalIgnoreCase) || e.Key.StartsWith(below, StringComparison.OrdinalIgnoreCase))
+            .Select(e => e.Origin).Distinct().ToList();
+        return origins.Count switch
+        {
+            0 => "default",
+            1 => origins[0] == ConfigOrigin.File ? "file" : "env",
+            _ => "file+env",
+        };
+    }
+
+    /// <summary>
+    /// How the owner wrote <paramref name="key"/>: a JSON path (<c>chats[2].reed</c>) for file values,
+    /// the variable name (<c>TGMCP_Chats__2__Reed</c>) for environment values.
+    /// </summary>
+    public string Display(string key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        var below = key + ":";
+        var hit = _effective.Values.Concat(_all)
+            .Where(e => e.Key.Equals(key, StringComparison.OrdinalIgnoreCase) || e.Key.StartsWith(below, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(e => e.Key.Length == key.Length ? 0 : 1)
+            .FirstOrDefault();
+        return hit is null ? Render(key, ConfigOrigin.Env) : Render(hit.Key[..key.Length], hit.Origin);
+    }
+
+    private static string Render(string key, ConfigOrigin origin)
+    {
+        if (origin != ConfigOrigin.File) return Prefix + key.Replace(":", "__", StringComparison.Ordinal);
+        var sb = new StringBuilder();
+        foreach (var seg in key.Split(':'))
+        {
+            if (seg.Length > 0 && seg.All(char.IsAsciiDigit)) sb.Append('[').Append(seg).Append(']');
+            else sb.Append(sb.Length == 0 ? "" : ".").Append(seg);
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>Rewrites the leading key of an error ("chats:0:reed: msg") to how the owner wrote it.</summary>
+    private string Pretty(string error)
+    {
+        var i = error.IndexOf(": ", StringComparison.Ordinal);
+        if (i <= 0) return error;
+        var key = error[..i];
+        return key.Any(char.IsWhiteSpace) || key.Contains('/', StringComparison.Ordinal) ? error : Display(key) + error[i..];
     }
 
     /// <summary>A config that denies everything (e.g. loading failed).</summary>
@@ -175,7 +322,7 @@ public sealed class PolicyConfig
         foreach (var (key, value) in kv.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
         {
             var p = key.Split(':');
-            if (p.Length == 1 && RuntimeKeys.Contains(p[0])) continue;
+            if (p.Length == 1 && RuntimeKeys.Contains(p[0])) continue; // environment-only runtime settings
             switch (p[0].ToLowerInvariant())
             {
                 case "enabled" when p.Length == 1:
@@ -206,6 +353,14 @@ public sealed class PolicyConfig
                         default: Unknown(key); break;
                     }
                     break;
+                case "media" when p.Length == 2:
+                    switch (p[1].ToLowerInvariant())
+                    {
+                        case "dir": MediaDir = AbsolutePath(key, value); break;
+                        case "hostdir": MediaHostDir = AbsolutePath(key, value); break;
+                        default: Unknown(key); break;
+                    }
+                    break;
                 case "chats" or "deny" when p.Length == 3:
                     if (!int.TryParse(p[1], NumberStyles.None, CultureInfo.InvariantCulture, out var idx) || idx > 9999)
                     {
@@ -225,7 +380,7 @@ public sealed class PolicyConfig
         var chats = new List<ChatRule>();
         foreach (var (i, d) in chatParts)
         {
-            var where = $"Chats:{i}";
+            var where = $"chats:{i}";
             foreach (var k in d.Keys.Where(k => !ChatKeys.Contains(k))) Unknown($"{where}:{k}");
             var sel = ParseSelector(where, d, ChatSelectors);
             chats.Add(new ChatRule(i, sel ?? new Selector(SelectorKind.Id, "", 0),
@@ -233,15 +388,16 @@ public sealed class PolicyConfig
                 d.TryGetValue("Write", out var w) ? Write($"{where}:Write", w) : null,
                 d.TryGetValue("Features", out var f) ? FeatureList($"{where}:Features", f) : null,
                 d.TryGetValue("SinceDays", out var s) ? Positive($"{where}:SinceDays", s) : null,
-                d.TryGetValue("Topics", out var t) ? TopicList($"{where}:Topics", t) : null));
+                d.TryGetValue("Topics", out var t) ? TopicList($"{where}:Topics", t) : null,
+                Label(d)));
         }
         var denies = new List<DenyRule>();
         foreach (var (i, d) in denyParts)
         {
-            var where = $"Deny:{i}";
-            foreach (var k in d.Keys.Where(k => !DenySelectors.Contains(k))) Unknown($"{where}:{k}");
+            var where = $"deny:{i}";
+            foreach (var k in d.Keys.Where(k => !DenyKeys.Contains(k))) Unknown($"{where}:{k}");
             var sel = ParseSelector(where, d, DenySelectors);
-            if (sel is not null) denies.Add(new DenyRule(i, sel));
+            if (sel is not null) denies.Add(new DenyRule(i, sel, Label(d)));
         }
         Chats = chats;
         Denies = denies;
@@ -250,14 +406,26 @@ public sealed class PolicyConfig
     private static readonly string[] ChatSelectors = ["Id", "Username", "Title"];
     private static readonly string[] DenySelectors = ["Id", "Username", "Type", "Folder"];
     private static readonly HashSet<string> ChatKeys = new(StringComparer.OrdinalIgnoreCase)
-        { "Id", "Username", "Title", "Read", "Write", "Features", "SinceDays", "Topics" };
+        { "Id", "Username", "Title", "Read", "Write", "Features", "SinceDays", "Topics", "Name", "Note" };
+    private static readonly HashSet<string> DenyKeys = new(StringComparer.OrdinalIgnoreCase)
+        { "Id", "Username", "Type", "Folder", "Name", "Note" };
+
+    private static string? Label(Dictionary<string, string> d) =>
+        d.TryGetValue("Name", out var n) && n.Length > 0 ? n : d.TryGetValue("Note", out var note) && note.Length > 0 ? note : null;
+
+    private string? AbsolutePath(string key, string v)
+    {
+        if (v.StartsWith('/') && !v.Split('/').Contains("..")) return v;
+        _errors.Add($"{key}: expected an absolute path");
+        return null;
+    }
 
     private Selector? ParseSelector(string where, Dictionary<string, string> d, string[] allowed)
     {
         var present = allowed.Where(d.ContainsKey).ToList();
         if (present.Count != 1)
         {
-            _errors.Add($"{where}: needs exactly one selector of {string.Join("|", allowed)}, found {present.Count}");
+            _errors.Add($"{where}: needs exactly one selector of {string.Join("|", allowed.Select(a => a.ToLowerInvariant()))}, found {present.Count}");
             return null;
         }
         var k = present[0];
@@ -293,13 +461,6 @@ public sealed class PolicyConfig
                 _errors.Add($"{at}: empty");
                 return null;
         }
-    }
-
-    /// <summary>"Chats:0:Id: msg" -> "TGMCP_Chats__0__Id: msg" so errors name the variable the owner set.</summary>
-    private static string EnvForm(string error)
-    {
-        var i = error.IndexOf(": ", StringComparison.Ordinal);
-        return i <= 0 ? error : Prefix + error[..i].Replace(":", "__", StringComparison.Ordinal) + error[i..];
     }
 
     private void Unknown(string key) => _errors.Add($"{key}: unknown key");
@@ -363,7 +524,7 @@ public sealed class PolicyConfig
         return set;
     }
 
-    private IReadOnlySet<int> TopicList(string key, string v)
+    private IReadOnlySet<int>? TopicList(string key, string v)
     {
         var set = new HashSet<int>();
         foreach (var item in Split(v))
@@ -371,8 +532,7 @@ public sealed class PolicyConfig
             if (int.TryParse(item, NumberStyles.None, CultureInfo.InvariantCulture, out var t) && t >= 1) set.Add(t);
             else _errors.Add($"{key}: topic ids must be positive integers");
         }
-        if (set.Count == 0) _errors.Add($"{key}: empty topic list (remove the key to allow all topics)");
-        return set;
+        return set.Count == 0 ? null : set; // empty list = no topic restriction
     }
 
     private static IEnumerable<string> Split(string v) =>

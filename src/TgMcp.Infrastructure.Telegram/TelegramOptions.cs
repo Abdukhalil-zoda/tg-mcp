@@ -4,8 +4,8 @@ namespace TgMcp.Infrastructure.Telegram;
 
 /// <summary>
 /// TDLib settings, bound from the root of the TGMCP_ configuration
-/// (TGMCP_ApiId, TGMCP_ApiHash, TGMCP_DatabaseKey or TGMCP_DatabaseKeyFile, TGMCP_DataDir,
-/// TGMCP_MediaDir, TGMCP_MediaHostDir).
+/// (TGMCP_ApiId, TGMCP_ApiHash, TGMCP_DatabaseKey or TGMCP_DatabaseKeyFile, TGMCP_DataDir).
+/// MediaDir and MediaHostDir are set from the policy's "media" section.
 /// Values are never logged.
 /// </summary>
 public sealed class TelegramOptions
@@ -41,11 +41,11 @@ public sealed class TelegramOptions
     /// <summary>TDLib files directory.</summary>
     public string FilesDir => Path.Combine(DataDir, "files");
 
-    /// <summary>Directory for media handed to the client (TGMCP_MediaDir, default {DataDir}/media). May be a bind mount.</summary>
+    /// <summary>Directory for media handed to the client (policy media.dir, default {DataDir}/media). May be a bind mount.</summary>
     public string? MediaDir { get; set; }
 
     /// <summary>
-    /// Optional host-side path of <see cref="EffectiveMediaDir"/> (TGMCP_MediaHostDir). Used only to report
+    /// Optional host-side path of <see cref="EffectiveMediaDir"/> (policy media.hostDir). Used only to report
     /// host paths to the client; pure string mapping, nothing is accessed on the host.
     /// </summary>
     public string? MediaHostDir { get; set; }

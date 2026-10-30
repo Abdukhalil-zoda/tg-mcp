@@ -112,7 +112,7 @@ public interface ITelegramClient
 
 /// <summary>Where a downloaded file was stored.</summary>
 /// <param name="Path">Path inside the server (container).</param>
-/// <param name="HostPath">The same file on the host, if TGMCP_MediaHostDir is configured.</param>
+/// <param name="HostPath">The same file on the host, if media.hostDir is configured.</param>
 public sealed record StoredMedia(string Path, string? HostPath);
 
 /// <summary>Stores downloaded media in the media directory.</summary>

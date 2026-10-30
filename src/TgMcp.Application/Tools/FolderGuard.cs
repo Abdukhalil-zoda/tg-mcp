@@ -5,7 +5,7 @@ using TgMcp.Domain;
 namespace TgMcp.Application.Tools;
 
 /// <summary>
-/// Resolves chat folders for <c>Deny__N__Folder</c> rules: on first use and then at most every
+/// Resolves chat folders for <c>"folder"</c> deny rules: on first use and then at most every
 /// <see cref="RefreshInterval"/>. Any failure fails closed (the policy then denies everything).
 /// </summary>
 public sealed partial class FolderGuard

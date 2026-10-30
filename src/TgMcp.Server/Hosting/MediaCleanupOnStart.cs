@@ -4,7 +4,7 @@ using TgMcp.Domain;
 
 namespace TgMcp.Server.Hosting;
 
-/// <summary>Applies Limits__MediaRetentionDays once at startup (skipped when the config is invalid).</summary>
+/// <summary>Applies limits.mediaRetentionDays once at startup (skipped when the config is invalid).</summary>
 public sealed class MediaCleanupOnStart : IHostedService
 {
     private readonly IPolicy _policy;

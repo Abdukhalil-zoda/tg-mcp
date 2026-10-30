@@ -80,7 +80,7 @@ public sealed class PolicyEngine : IPolicy
     public string? GlobalDenyReason()
     {
         if (!Config.IsValid) return ConfigProblem();
-        if (!Config.Enabled) return "TGMCP_Enabled is not true";
+        if (!Config.Enabled) return "\"enabled\" is not true";
         if (NeedsFolders && _folderError is not null) return $"folder deny unresolved, failing closed: {_folderError}";
         return null;
     }
@@ -98,11 +98,11 @@ public sealed class PolicyEngine : IPolicy
     {
         ArgumentNullException.ThrowIfNull(needs);
         if (!Config.IsValid) return new Decision(false, "global", ConfigProblem());
-        if (!Config.Enabled) return new Decision(false, "global", "TGMCP_Enabled is not true");
+        if (!Config.Enabled) return new Decision(false, "global", "\"enabled\" is not true");
         foreach (var n in needs)
         {
             var sw = Names.Switch(n);
-            if (!Config.Switches.Contains(sw)) return new Decision(false, "global", $"TGMCP_Features__{sw} is off");
+            if (!Config.Switches.Contains(sw)) return new Decision(false, "global", $"\"features.{Names.Camel(sw)}\" is off");
         }
         return new Decision(true, "global", "ok");
     }
