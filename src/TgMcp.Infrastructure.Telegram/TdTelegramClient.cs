@@ -12,7 +12,7 @@ namespace TgMcp.Infrastructure.Telegram;
 /// TDLib implementation of <see cref="ITelegramClient"/> for the MCP server. Starts TDLib lazily on the
 /// first tool call, never prompts for login, and refuses to start when no session exists.
 /// </summary>
-public sealed class TdTelegramClient : ITelegramClient, IAsyncDisposable
+public sealed class TdTelegramClient : ITelegramClient, IInboundMessageSource, IAsyncDisposable
 {
     private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(1);
@@ -23,7 +23,7 @@ public sealed class TdTelegramClient : ITelegramClient, IAsyncDisposable
     private readonly ILogger<TdTelegramClient> _log;
     private readonly SemaphoreSlim _startGate = new(1, 1);
     private readonly ConcurrentDictionary<long, (TgChat Chat, DateTimeOffset At)> _chats = new();
-    private readonly ConcurrentDictionary<long, string> _userNames = new();
+    private readonly ConcurrentDictionary<long, (string Name, string? Username, bool IsBot)> _users = new();
     private TdSession? _session;
     private long _myId;
 
@@ -272,38 +272,63 @@ public sealed class TdTelegramClient : ITelegramClient, IAsyncDisposable
     {
         var (text, media) = MessageContentMapper.Map(m.Content);
         var topic = m.TopicId is MessageTopic.MessageTopicForum f ? f.ForumTopicId : (int?)null;
-        return new TgMessage(m.ChatId, m.Id, DateTimeOffset.FromUnixTimeSeconds(m.Date), await SenderName(m.SenderId, ct).ConfigureAwait(false),
-            m.IsOutgoing || (m.SenderId is MessageSender.MessageSenderUser u && u.UserId == _myId), text, media, topic);
+        var (name, username, isBot, senderId) = await Sender(m.SenderId, ct).ConfigureAwait(false);
+        var replyTo = m.ReplyTo is MessageReplyTo.MessageReplyToMessage r && (r.ChatId == 0 || r.ChatId == m.ChatId) ? r.MessageId : (long?)null;
+        var display = username is null ? name : $"{name} (@{username})";
+        return new TgMessage(m.ChatId, m.Id, DateTimeOffset.FromUnixTimeSeconds(m.Date), display,
+            m.IsOutgoing || (m.SenderId is MessageSender.MessageSenderUser u && u.UserId == _myId), text, media, topic,
+            senderId, username, isBot, replyTo);
     }
 
-    private async Task<string> SenderName(MessageSender? sender, CancellationToken ct)
+    private async Task<(string Name, string? Username, bool IsBot, long? Id)> Sender(MessageSender? sender, CancellationToken ct)
     {
         switch (sender)
         {
             case MessageSender.MessageSenderUser u:
-                if (_userNames.TryGetValue(u.UserId, out var cached)) return cached;
+                if (_users.TryGetValue(u.UserId, out var cached)) return (cached.Name, cached.Username, cached.IsBot, u.UserId);
                 try
                 {
                     var user = await S.CallAsync(new GetUser { UserId = u.UserId }, ct).ConfigureAwait(false);
                     var name = $"{user.FirstName} {user.LastName}".Trim();
-                    if (user.Usernames?.ActiveUsernames is [var first, ..]) name += $" (@{first})";
-                    return _userNames[u.UserId] = name.Length > 0 ? name : $"user {u.UserId}";
+                    var entry = (name.Length > 0 ? name : $"user {u.UserId}", user.Usernames?.ActiveUsernames is [var first, ..] ? first : null,
+                        user.Type is UserType.UserTypeBot);
+                    _users[u.UserId] = entry;
+                    return (entry.Item1, entry.Item2, entry.Item3, u.UserId);
                 }
                 catch (TelegramCallException)
                 {
-                    return $"user {u.UserId}";
+                    return ($"user {u.UserId}", null, false, u.UserId);
                 }
             case MessageSender.MessageSenderChat c:
                 try
                 {
-                    return (await GetChatAsync(c.ChatId, ct).ConfigureAwait(false)).Title;
+                    var chat = await GetChatAsync(c.ChatId, ct).ConfigureAwait(false);
+                    return (chat.Title, chat.Usernames is [var first, ..] ? first : null, false, c.ChatId);
                 }
                 catch (TelegramCallException)
                 {
-                    return $"chat {c.ChatId}";
+                    return ($"chat {c.ChatId}", null, false, c.ChatId);
                 }
             default:
-                return "unknown";
+                return ("unknown", null, false, null);
+        }
+    }
+
+    /// <inheritdoc />
+    public async IAsyncEnumerable<TgMessage> ReadInboundAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        await foreach (var m in S.NewMessages.ReadAllAsync(ct).ConfigureAwait(false))
+        {
+            TgMessage? mapped;
+            try
+            {
+                mapped = await MapMessage(m, ct).ConfigureAwait(false);
+            }
+            catch (TelegramCallException)
+            {
+                mapped = null; // skip messages that cannot be mapped
+            }
+            if (mapped is not null) yield return mapped;
         }
     }
 

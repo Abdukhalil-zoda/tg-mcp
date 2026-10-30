@@ -31,6 +31,10 @@ public sealed record TgMedia(int FileId, long Size, string Kind, string? FileNam
 /// <param name="Text">Text or caption; a placeholder like "[sticker]" for other content.</param>
 /// <param name="Media">Attached media, if any.</param>
 /// <param name="TopicId">Forum topic id, if the message belongs to a forum topic.</param>
+/// <param name="SenderId">User or chat id of the sender, if known.</param>
+/// <param name="SenderUsername">Sender's first public username, if any.</param>
+/// <param name="SenderIsBot">True if the sender is a bot account.</param>
+/// <param name="ReplyToMessageId">Id of the message this one replies to (same chat), if any.</param>
 public sealed record TgMessage(
     long ChatId,
     long Id,
@@ -39,7 +43,11 @@ public sealed record TgMessage(
     bool FromMe,
     string Text,
     TgMedia? Media,
-    int? TopicId)
+    int? TopicId,
+    long? SenderId = null,
+    string? SenderUsername = null,
+    bool SenderIsBot = false,
+    long? ReplyToMessageId = null)
 {
     /// <summary>True if the message has an attached media file.</summary>
     public bool HasMedia => Media is not null;
@@ -138,6 +146,13 @@ public interface ITelegramClient
 /// <param name="Path">Path inside the server (container).</param>
 /// <param name="HostPath">The same file on the host, if media.hostDir is configured.</param>
 public sealed record StoredMedia(string Path, string? HostPath);
+
+/// <summary>New messages pushed by Telegram while the server runs (TDLib updateNewMessage).</summary>
+public interface IInboundMessageSource
+{
+    /// <summary>Yields new messages as they arrive. Requires <see cref="ITelegramClient.EnsureReadyAsync"/> first.</summary>
+    IAsyncEnumerable<TgMessage> ReadInboundAsync(CancellationToken ct);
+}
 
 /// <summary>Stores downloaded media in the media directory.</summary>
 public interface IMediaStore

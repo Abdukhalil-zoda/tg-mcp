@@ -1,30 +1,42 @@
+using System.Globalization;
 using TgMcp.Application.Telegram;
 using static TdLib.TdApi;
 using static TdLib.TdApi.MessageContent;
 
 namespace TgMcp.Infrastructure.Telegram;
 
-/// <summary>Extracts text/caption and the downloadable file from TDLib message content.</summary>
+/// <summary>
+/// Extracts text and the downloadable file from TDLib message content. Media is described in brackets
+/// (e.g. <c>[photo]</c>, <c>[document report.pdf]</c>, <c>[voice 12s]</c>), followed by the caption; nothing is downloaded.
+/// </summary>
 public static class MessageContentMapper
 {
-    /// <summary>Text (or a "[kind]" placeholder) and media of <paramref name="content"/>.</summary>
+    /// <summary>Text (description + caption for media) and media of <paramref name="content"/>.</summary>
     public static (string Text, TgMedia? Media) Map(MessageContent? content) => content switch
     {
         MessageText t => (t.Text?.Text ?? "", null),
-        MessagePhoto p => (Caption(p.Caption, "photo"), Photo(p.Photo)),
-        MessageVideo v => (Caption(v.Caption, "video"), File(v.Video?.Video_, "video", v.Video?.FileName, v.Video?.MimeType)),
-        MessageDocument d => (Caption(d.Caption, "document"), File(d.Document?.Document_, "document", d.Document?.FileName, d.Document?.MimeType)),
-        MessageAudio a => (Caption(a.Caption, "audio"), File(a.Audio?.Audio_, "audio", a.Audio?.FileName, a.Audio?.MimeType)),
-        MessageVoiceNote n => (Caption(n.Caption, "voice"), File(n.VoiceNote?.Voice, "voice", null, n.VoiceNote?.MimeType)),
-        MessageAnimation an => (Caption(an.Caption, "animation"), File(an.Animation?.Animation_, "animation", an.Animation?.FileName, an.Animation?.MimeType)),
-        MessageVideoNote vn => ("[video note]", File(vn.VideoNote?.Video, "video_note", null, "video/mp4")),
-        MessageSticker => ("[sticker]", null),
+        MessagePhoto p => (With("[photo]", p.Caption), Photo(p.Photo)),
+        MessageVideo v => (With($"[video{Seconds(v.Video?.Duration)}]", v.Caption), File(v.Video?.Video_, "video", v.Video?.FileName, v.Video?.MimeType)),
+        MessageDocument d => (With($"[document{Name(d.Document?.FileName)}]", d.Caption), File(d.Document?.Document_, "document", d.Document?.FileName, d.Document?.MimeType)),
+        MessageAudio a => (With($"[audio{Name(AudioName(a.Audio))}{Seconds(a.Audio?.Duration)}]", a.Caption), File(a.Audio?.Audio_, "audio", a.Audio?.FileName, a.Audio?.MimeType)),
+        MessageVoiceNote n => (With($"[voice{Seconds(n.VoiceNote?.Duration)}]", n.Caption), File(n.VoiceNote?.Voice, "voice", null, n.VoiceNote?.MimeType)),
+        MessageAnimation an => (With("[animation]", an.Caption), File(an.Animation?.Animation_, "animation", an.Animation?.FileName, an.Animation?.MimeType)),
+        MessageVideoNote vn => ($"[video note{Seconds(vn.VideoNote?.Duration)}]", File(vn.VideoNote?.Video, "video_note", null, "video/mp4")),
+        MessageSticker s => (string.IsNullOrEmpty(s.Sticker?.Emoji) ? "[sticker]" : $"[sticker {s.Sticker.Emoji}]", null),
         null => ("", null),
         _ => ($"[{Placeholder(content)}]", null),
     };
 
-    private static string Caption(FormattedText? caption, string kind) =>
-        string.IsNullOrEmpty(caption?.Text) ? $"[{kind}]" : caption.Text;
+    /// <summary>"[kind]" or "[kind] caption".</summary>
+    private static string With(string description, FormattedText? caption) =>
+        string.IsNullOrEmpty(caption?.Text) ? description : $"{description} {caption.Text}";
+
+    private static string Seconds(int? duration) => duration is > 0 ? " " + duration.Value.ToString(CultureInfo.InvariantCulture) + "s" : "";
+
+    private static string Name(string? name) => string.IsNullOrEmpty(name) ? "" : " " + name;
+
+    private static string? AudioName(Audio? a) =>
+        a is null ? null : !string.IsNullOrEmpty(a.Title) ? (string.IsNullOrEmpty(a.Performer) ? a.Title : $"{a.Performer} - {a.Title}") : a.FileName;
 
     private static TgMedia? Photo(Photo? photo)
     {

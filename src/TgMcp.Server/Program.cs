@@ -3,6 +3,7 @@ using Microsoft.Extensions.Hosting;
 using TgMcp.Infrastructure.Telegram;
 using TgMcp.Server.Cli;
 using TgMcp.Server.Hosting;
+using TgMcp.Server.Events;
 using TgMcp.Server.Mcp;
 
 const string Usage = """
@@ -48,8 +49,9 @@ static async Task<int> ServeAsync(string[] rest)
 
     var builder = Composition.CreateBuilder(rest);
     builder.Services.AddTelegramTools();
+    builder.Services.AddHostedService<ChannelEventService>();
     builder.Services
-        .AddMcpServer(o => o.ServerInfo = new() { Name = "tgmcp", Version = typeof(Composition).Assembly.GetName().Version?.ToString(3) ?? "0.1.0" })
+        .AddMcpServer(o => McpSetup.Configure(o, builder.Services))
         .WithStreamServerTransport(Console.OpenStandardInput(), stdout)
         .WithTools<TelegramTools>();
     using var host = builder.Build();

@@ -62,6 +62,7 @@ public sealed record ConfigEntry(string Key, string? Value, ConfigOrigin Origin)
 /// <param name="SinceDays">Maximum message age in days.</param>
 /// <param name="Topics">Allowed forum topic ids (null or empty = all topics).</param>
 /// <param name="Name">Optional human label (<c>name</c> or <c>note</c>); never used for matching.</param>
+/// <param name="Notify">Inbound messages become channel events (needs read).</param>
 public sealed record ChatRule(
     int Index,
     Selector Selector,
@@ -70,7 +71,8 @@ public sealed record ChatRule(
     IReadOnlySet<Feature>? Features,
     int? SinceDays,
     IReadOnlySet<int>? Topics,
-    string? Name = null)
+    string? Name = null,
+    bool? Notify = null)
 {
     /// <summary>Label used in decisions and audit.</summary>
     public string Label => $"chats[{Index}] {Selector}";
@@ -118,6 +120,18 @@ public sealed class PolicyConfig
     public WriteMode DefaultWrite { get; private set; } = WriteMode.Off;
     /// <summary>defaults.features.</summary>
     public IReadOnlySet<Feature> DefaultFeatures { get; private set; } = Names.NoFeatures;
+    /// <summary>defaults.notify.</summary>
+    public bool DefaultNotify { get; private set; }
+    /// <summary>events.enabled: push inbound messages to the MCP client as channel events.</summary>
+    public bool EventsEnabled { get; private set; }
+    /// <summary>events.includeOutgoing: also emit the owner's own messages.</summary>
+    public bool EventsIncludeOutgoing { get; private set; }
+    /// <summary>events.maxPerMinute.</summary>
+    public int EventsMaxPerMinute { get; private set; } = 30;
+    /// <summary>events.maxTextChars: event text is truncated to this length.</summary>
+    public int EventsMaxTextChars { get; private set; } = 4000;
+    /// <summary>events.catchUpMinutes: on start, emit messages missed in this window (0 = off).</summary>
+    public int EventsCatchUpMinutes { get; private set; }
     /// <summary>defaults.sinceDays.</summary>
     public int? DefaultSinceDays { get; private set; }
     /// <summary>Chats rules ordered by N.</summary>
@@ -342,6 +356,18 @@ public sealed class PolicyConfig
                         case "write": DefaultWrite = Write(key, value) ?? WriteMode.Off; break;
                         case "features": DefaultFeatures = FeatureList(key, value); break;
                         case "sincedays": DefaultSinceDays = Positive(key, value); break;
+                        case "notify": DefaultNotify = Bool(key, value); break;
+                        default: Unknown(key); break;
+                    }
+                    break;
+                case "events" when p.Length == 2:
+                    switch (p[1].ToLowerInvariant())
+                    {
+                        case "enabled": EventsEnabled = Bool(key, value); break;
+                        case "includeoutgoing": EventsIncludeOutgoing = Bool(key, value); break;
+                        case "maxperminute": EventsMaxPerMinute = Positive(key, value) ?? EventsMaxPerMinute; break;
+                        case "maxtextchars": EventsMaxTextChars = Positive(key, value) ?? EventsMaxTextChars; break;
+                        case "catchupminutes": EventsCatchUpMinutes = NonNegative(key, value) ?? EventsCatchUpMinutes; break;
                         default: Unknown(key); break;
                     }
                     break;
@@ -395,7 +421,11 @@ public sealed class PolicyConfig
                 d.TryGetValue("Features", out var f) ? FeatureList($"{where}:Features", f) : null,
                 d.TryGetValue("SinceDays", out var s) ? Positive($"{where}:SinceDays", s) : null,
                 d.TryGetValue("Topics", out var t) ? TopicList($"{where}:Topics", t) : null,
-                Label(d)));
+                Label(d),
+                d.TryGetValue("Notify", out var n) ? Bool($"{where}:Notify", n) : null));
+            var rule = chats[^1];
+            if ((rule.Notify ?? DefaultNotify) && !(rule.Read ?? DefaultRead))
+                _errors.Add($"{where}: \"notify\": true needs \"read\": true (event content is message text)");
         }
         var denies = new List<DenyRule>();
         foreach (var (i, d) in denyParts)
@@ -407,12 +437,14 @@ public sealed class PolicyConfig
         }
         Chats = chats;
         Denies = denies;
+        if (DefaultNotify && !DefaultRead)
+            _errors.Add("defaults:notify: \"notify\": true needs \"read\": true (event content is message text)");
     }
 
     private static readonly string[] ChatSelectors = ["Id", "Username", "Title"];
     private static readonly string[] DenySelectors = ["Id", "Username", "Type", "Folder"];
     private static readonly HashSet<string> ChatKeys = new(StringComparer.OrdinalIgnoreCase)
-        { "Id", "Username", "Title", "Read", "Write", "Features", "SinceDays", "Topics", "Name", "Note" };
+        { "Id", "Username", "Title", "Read", "Write", "Features", "SinceDays", "Topics", "Name", "Note", "Notify" };
     private static readonly HashSet<string> DenyKeys = new(StringComparer.OrdinalIgnoreCase)
         { "Id", "Username", "Type", "Folder", "Name", "Note" };
 
@@ -554,9 +586,10 @@ public sealed class PolicyConfig
         sb.Append($"enabled={Enabled.ToString().ToLowerInvariant()}\n");
         foreach (var s in Enum.GetValues<GlobalSwitch>())
             sb.Append($"features.{s}={_switches.Contains(s).ToString().ToLowerInvariant()}\n");
+        sb.Append($"events enabled={EventsEnabled.ToString().ToLowerInvariant()} include_outgoing={EventsIncludeOutgoing.ToString().ToLowerInvariant()} max_per_minute={EventsMaxPerMinute} max_text_chars={EventsMaxTextChars} catch_up_minutes={EventsCatchUpMinutes} default_notify={DefaultNotify.ToString().ToLowerInvariant()}\n");
         sb.Append($"defaults read={DefaultRead.ToString().ToLowerInvariant()} write={Names.Snake(DefaultWrite)} features={F(DefaultFeatures)} since_days={DefaultSinceDays?.ToString(CultureInfo.InvariantCulture) ?? "-"}\n");
         foreach (var r in Chats)
-            sb.Append($"{r.Label} read={r.Read?.ToString().ToLowerInvariant() ?? "-"} write={(r.Write is WriteMode w ? Names.Snake(w) : "-")} features={F(r.Features)} since_days={r.SinceDays?.ToString(CultureInfo.InvariantCulture) ?? "-"} topics={(r.Topics is null ? "-" : string.Join(",", r.Topics.Order()))}\n");
+            sb.Append($"{r.Label} read={r.Read?.ToString().ToLowerInvariant() ?? "-"} write={(r.Write is WriteMode w ? Names.Snake(w) : "-")} features={F(r.Features)} since_days={r.SinceDays?.ToString(CultureInfo.InvariantCulture) ?? "-"} topics={(r.Topics is null ? "-" : string.Join(",", r.Topics.Order()))} notify={r.Notify?.ToString().ToLowerInvariant() ?? "-"}\n");
         foreach (var d in Denies) sb.Append($"{d.Label}\n");
         sb.Append($"limits list_chats={Names.Snake(ListChats)} max_messages_per_call={MaxMessagesPerCall} rate_per_minute={RatePerMinute} max_media_mb={MaxMediaMb} media_retention_days={MediaRetentionDays} sends_per_minute={SendsPerMinute}\n");
         return sb.ToString();

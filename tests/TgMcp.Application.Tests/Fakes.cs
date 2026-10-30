@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using TgMcp.Application.Audit;
 using TgMcp.Application.Drafts;
+using TgMcp.Application.Events;
 using TgMcp.Application.Telegram;
 using TgMcp.Application.Tools;
 using TgMcp.Domain;
@@ -168,6 +169,30 @@ internal sealed class MemoryDraftStore : IDraftStore
     public Task<bool> DeleteAsync(string id, CancellationToken ct) => Task.FromResult(Drafts.Remove(id));
 }
 
+internal sealed class FakeNotifier : IChannelNotifier
+{
+    public List<ChannelEvent> Events { get; } = [];
+    public Task WaitForClientAsync(CancellationToken ct) => Task.CompletedTask;
+
+    public Task NotifyAsync(ChannelEvent channelEvent, CancellationToken ct)
+    {
+        Events.Add(channelEvent);
+        return Task.CompletedTask;
+    }
+}
+
+internal sealed class MemoryEventState : IEventStateStore
+{
+    public Dictionary<long, long> Saved { get; private set; } = [];
+    public Task<Dictionary<long, long>> LoadAsync(CancellationToken ct) => Task.FromResult(new Dictionary<long, long>(Saved));
+
+    public Task SaveAsync(IReadOnlyDictionary<long, long> lastDelivered, CancellationToken ct)
+    {
+        Saved = new Dictionary<long, long>(lastDelivered);
+        return Task.CompletedTask;
+    }
+}
+
 /// <summary>Wires the real use cases to fakes.</summary>
 internal sealed class Harness
 {
@@ -199,6 +224,11 @@ internal sealed class Harness
     private ISendLimiter? _sendLimiter;
     public SendMessageTool Send => new(Context, DraftStore, _sendLimiter ??= new PerChatRateLimiter(Policy.Config.SendsPerMinute, Time));
     public DraftCommands DraftCommands => new(DraftStore, Context, Audit);
+    public FakeNotifier Notifier { get; } = new();
+    public MemoryEventState EventState { get; } = new();
+    private InboundEventProcessor? _events;
+    public InboundEventProcessor Events => _events ??= new(Policy, Telegram, Notifier, Audit, EventState,
+        new FolderGuard(Policy, Telegram, Time, NullLogger<FolderGuard>.Instance), Time, NullLogger<InboundEventProcessor>.Instance);
     public DownloadMediaTool Download => new(Context, Media);
 
     public AuditEntry LastAudit => Audit.Entries[^1];

@@ -161,6 +161,7 @@ public sealed record ChatInfo(long Id, string Title, IReadOnlyList<string> Usern
 /// <param name="Source">Which part of the policy decided.</param>
 /// <param name="RuleIndex">N of the matched <c>Chats__N</c> rule, if any.</param>
 /// <param name="Missing">The need that was not granted, for denials by <see cref="IPolicy.Check"/>.</param>
+/// <param name="Notify">Effective <c>notify</c>: inbound messages of this chat become channel events.</param>
 public sealed record Decision(
     bool Allowed,
     string Rule,
@@ -172,7 +173,8 @@ public sealed record Decision(
     IReadOnlySet<int>? Topics = null,
     DecisionSource Source = DecisionSource.Global,
     int? RuleIndex = null,
-    Need? Missing = null)
+    Need? Missing = null,
+    bool Notify = false)
 {
     /// <summary>Effective features, never null.</summary>
     public IReadOnlySet<Feature> FeatureSet => Features ?? Names.NoFeatures;

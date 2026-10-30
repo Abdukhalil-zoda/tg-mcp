@@ -26,6 +26,12 @@ public sealed partial class TdSession : IAsyncDisposable
     private ChatFolderInfo[] _folders = [];
     private bool _foldersKnown;
     private string? _parametersError;
+    private readonly System.Threading.Channels.Channel<Message> _newMessages =
+        System.Threading.Channels.Channel.CreateBounded<Message>(new System.Threading.Channels.BoundedChannelOptions(1000)
+        {
+            FullMode = System.Threading.Channels.BoundedChannelFullMode.DropOldest,
+            SingleReader = true,
+        });
     private readonly System.Collections.Concurrent.ConcurrentDictionary<(long Chat, long OldId), TaskCompletionSource<Message>> _sends = new();
 
     /// <summary>Creates the TDLib client (no network traffic until the first request).</summary>
@@ -47,6 +53,9 @@ public sealed partial class TdSession : IAsyncDisposable
         get { lock (_lock) return _state; }
     }
 
+    /// <summary>New messages from updateNewMessage (bounded; the oldest are dropped if nobody reads).</summary>
+    public System.Threading.Channels.ChannelReader<Message> NewMessages => _newMessages.Reader;
+
     /// <summary>Why SetTdlibParameters failed (e.g. the database is locked by another process), or null.</summary>
     public string? ParametersError
     {
@@ -65,6 +74,9 @@ public sealed partial class TdSession : IAsyncDisposable
         {
             case Update.UpdateAuthorizationState a:
                 SetState(a.AuthorizationState);
+                break;
+            case Update.UpdateNewMessage nm when nm.Message is not null:
+                _newMessages.Writer.TryWrite(nm.Message);
                 break;
             case Update.UpdateMessageSendSucceeded ok:
                 Pending(ok.Message.ChatId, ok.OldMessageId).TrySetResult(ok.Message);

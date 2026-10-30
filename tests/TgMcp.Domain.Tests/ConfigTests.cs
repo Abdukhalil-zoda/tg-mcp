@@ -167,6 +167,37 @@ public class ConfigTests
     }
 
     [Fact]
+    public void Notify_without_read_is_a_config_error()
+    {
+        var rule = PolicyConfig.FromPairs(("Chats__0__Id", "1"), ("Chats__0__Notify", "true"));
+        Assert.Contains(rule.Errors, e => e.StartsWith("TGMCP_Chats__0: \"notify\": true needs \"read\": true", StringComparison.Ordinal));
+        var dflt = PolicyConfig.FromPairs(("Defaults__Notify", "true"));
+        Assert.Contains(dflt.Errors, e => e.Contains("\"notify\": true needs \"read\": true", StringComparison.Ordinal));
+        Assert.True(PolicyConfig.FromPairs(("Defaults__Read", "true"), ("Defaults__Notify", "true")).IsValid);
+        Assert.True(PolicyConfig.FromPairs(("Defaults__Notify", "true"), ("Chats__0__Id", "1"), ("Chats__0__Read", "true"), ("Defaults__Read", "true")).IsValid);
+        // a rule may opt out of a defaults notify without read
+        Assert.True(PolicyConfig.FromPairs(("Defaults__Read", "true"), ("Defaults__Notify", "true"), ("Chats__0__Id", "1"), ("Chats__0__Read", "false"), ("Chats__0__Notify", "false")).IsValid);
+    }
+
+    [Fact]
+    public void Events_section_defaults_and_validation()
+    {
+        var c = PolicyConfig.FromPairs();
+        Assert.False(c.EventsEnabled);
+        Assert.False(c.EventsIncludeOutgoing);
+        Assert.Equal(30, c.EventsMaxPerMinute);
+        Assert.Equal(4000, c.EventsMaxTextChars);
+        Assert.Equal(0, c.EventsCatchUpMinutes);
+        Assert.False(PolicyConfig.FromPairs(("Events__MaxPerMinute", "0")).IsValid);
+        Assert.False(PolicyConfig.FromPairs(("Events__Bogus", "1")).IsValid);
+        Assert.True(PolicyConfig.FromPairs(("Events__CatchUpMinutes", "0")).IsValid);
+        var report = string.Join("\n", ConfigReport.Describe(PolicyConfig.FromPairs(("Events__Enabled", "true"), ("Chats__0__Id", "1"), ("Chats__0__Read", "true"), ("Chats__0__Notify", "true"))));
+        Assert.Contains("events.enabled = true [env]", report, StringComparison.Ordinal);
+        Assert.Contains("events: ON -> notify from chats[0]", report, StringComparison.Ordinal);
+        Assert.Contains("notify=true", report, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Master_switch_off_denies_even_with_rules()
     {
         var p = new PolicyEngine(PolicyConfig.FromPairs(("Enabled", "false"), ("Features__Read", "true"),

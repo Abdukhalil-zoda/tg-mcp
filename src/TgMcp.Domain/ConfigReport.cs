@@ -28,9 +28,14 @@ public static class ConfigReport
         foreach (var r in c.Chats)
         {
             yield return $"  {r.Label}{NameOf(r.Name)} [{c.SourceOf($"chats:{r.Index}")}] -> " + Effective(c, r.Read ?? c.DefaultRead, r.Write ?? c.DefaultWrite,
-                r.Features ?? c.DefaultFeatures, r.SinceDays ?? c.DefaultSinceDays, r.Topics);
+                r.Features ?? c.DefaultFeatures, r.SinceDays ?? c.DefaultSinceDays, r.Topics, r.Notify ?? c.DefaultNotify);
         }
-        yield return "  defaults -> " + Effective(c, c.DefaultRead, c.DefaultWrite, c.DefaultFeatures, c.DefaultSinceDays, null);
+        yield return "  defaults -> " + Effective(c, c.DefaultRead, c.DefaultWrite, c.DefaultFeatures, c.DefaultSinceDays, null, c.DefaultNotify);
+        var notifying = c.Chats.Where(r => r.Notify ?? c.DefaultNotify).Select(r => $"chats[{r.Index}]").ToList();
+        if (c.DefaultNotify) notifying.Add("defaults (not for bot/channel chats or bot senders)");
+        yield return c.EventsEnabled
+            ? $"events: ON -> notify from {(notifying.Count == 0 ? "no rule (nothing will be emitted)" : string.Join(", ", notifying))}"
+            : $"events: off{(notifying.Count > 0 ? " (rules with notify have no effect until events.enabled is true)" : "")}";
     }
 
     private static string NameOf(string? name) => name is null ? "" : $" \"{name}\"";
@@ -51,6 +56,12 @@ public static class ConfigReport
         yield return ("limits:sendsPerMinute", "limits.sendsPerMinute", c.SendsPerMinute.ToString(CultureInfo.InvariantCulture));
         yield return ("limits:maxMediaMb", "limits.maxMediaMb", c.MaxMediaMb.ToString(CultureInfo.InvariantCulture));
         yield return ("limits:mediaRetentionDays", "limits.mediaRetentionDays", c.MediaRetentionDays == 0 ? "0 (keep forever)" : c.MediaRetentionDays.ToString(CultureInfo.InvariantCulture));
+        yield return ("defaults:notify", "defaults.notify", B(c.DefaultNotify));
+        yield return ("events:enabled", "events.enabled", B(c.EventsEnabled));
+        yield return ("events:includeOutgoing", "events.includeOutgoing", B(c.EventsIncludeOutgoing));
+        yield return ("events:maxPerMinute", "events.maxPerMinute", c.EventsMaxPerMinute.ToString(CultureInfo.InvariantCulture));
+        yield return ("events:maxTextChars", "events.maxTextChars", c.EventsMaxTextChars.ToString(CultureInfo.InvariantCulture));
+        yield return ("events:catchUpMinutes", "events.catchUpMinutes", c.EventsCatchUpMinutes == 0 ? "0 (off)" : c.EventsCatchUpMinutes.ToString(CultureInfo.InvariantCulture));
         yield return ("media:dir", "media.dir", c.MediaDir ?? "{dataDir}/media");
         yield return ("media:hostDir", "media.hostDir", c.MediaHostDir ?? "none");
     }
@@ -58,7 +69,7 @@ public static class ConfigReport
     private static string Features(IReadOnlySet<Feature> f) =>
         "[" + string.Join(", ", f.Select(Names.Snake).Order(StringComparer.Ordinal)) + "]";
 
-    private static string Effective(PolicyConfig c, bool read, WriteMode write, IReadOnlySet<Feature> feats, int? since, IReadOnlySet<int>? topics)
+    private static string Effective(PolicyConfig c, bool read, WriteMode write, IReadOnlySet<Feature> feats, int? since, IReadOnlySet<int>? topics, bool notify)
     {
         string Gate(bool wanted, GlobalSwitch sw) => !wanted || c.Switches.Contains(sw) ? "" : $" (inactive: features.{Names.Camel(sw)} is off)";
         var parts = new List<string>
@@ -70,6 +81,7 @@ public static class ConfigReport
         parts.Add($"features=[{string.Join(", ", f)}]");
         if (since is int s) parts.Add($"sinceDays={s}");
         if (topics is not null) parts.Add($"topics=[{string.Join(",", topics.Order())}]");
+        if (notify) parts.Add("notify=true" + (c.EventsEnabled ? "" : " (inactive: events.enabled is false)"));
         return string.Join(" ", parts);
     }
 }

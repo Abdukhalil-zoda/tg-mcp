@@ -122,7 +122,8 @@ public sealed class PolicyEngine : IPolicy
             SinceDays: r?.SinceDays ?? Config.DefaultSinceDays,
             Topics: r?.Topics,
             Source: r is null ? DecisionSource.Defaults : DecisionSource.ChatRule,
-            RuleIndex: r?.Index);
+            RuleIndex: r?.Index,
+            Notify: r?.Notify ?? Config.DefaultNotify);
     }
 
     /// <inheritdoc />
