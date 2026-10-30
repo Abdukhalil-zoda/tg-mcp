@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+**/TestResults/
+.git/
+.github/
+.vs/
+.vscode/
+*.env
+!*.env.example
+data/
+*.md
+!README.md
+docker-compose*.yml

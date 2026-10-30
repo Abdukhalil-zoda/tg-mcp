@@ -1,0 +1,22 @@
+# Example only. Claude Code normally starts TgMcp itself with `docker run -i` (stdio);
+# this file is handy for `config check` and `login`:
+#   docker compose -f docker-compose.example.yml run --rm tgmcp config check
+#   docker compose -f docker-compose.example.yml run --rm tgmcp login
+services:
+  tgmcp:
+    image: tgmcp:dev
+    stdin_open: true
+    tty: false
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 384m
+    cpus: 0.25
+    tmpfs: [/tmp]
+    env_file:
+      - ./api.env     # secrets (from api.env.example)
+      - ./tgmcp.env   # policy (from tgmcp.env.example)
+    volumes:
+      - tgmcp-data:/data
+volumes:
+  tgmcp-data:

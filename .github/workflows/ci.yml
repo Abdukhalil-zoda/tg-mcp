@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Restore
+        run: dotnet restore TgMcp.slnx
+      - name: Build
+        run: dotnet build TgMcp.slnx --no-restore -c Release
+      - name: Test
+        run: dotnet test --solution TgMcp.slnx --no-build -c Release
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: build-test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image (no push)
+        run: docker build -t tgmcp:ci .
+      - name: Smoke - config check
+        run: docker run --rm --network none -e TGMCP_Enabled=true -e TGMCP_Features__Read=true tgmcp:ci config check
+      - name: Smoke - MCP tools/list over stdio
+        run: |
+          {
+            echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}'
+            sleep 1
+            echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+            echo '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+            sleep 3
+          } | docker run -i --rm --network none --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges tgmcp:ci > out.jsonl
+          python3 -c "import json; rows=[json.loads(l) for l in open('out.jsonl')]; tools=[t['name'] for r in rows if r.get('id')==2 for t in r['result']['tools']]; print(tools); assert len(tools)==7"

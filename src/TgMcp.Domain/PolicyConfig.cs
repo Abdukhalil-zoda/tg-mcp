@@ -150,6 +150,7 @@ public sealed class PolicyConfig
             if (!seen.TryAdd(key, value)) c._errors.Add($"{key}: duplicate key (differs only in case?)");
         }
         c.Load(seen);
+        for (var i = 0; i < c._errors.Count; i++) c._errors[i] = EnvForm(c._errors[i]);
         c.Sha256 = c.ComputeSha(seen);
         return c;
     }
@@ -288,6 +289,13 @@ public sealed class PolicyConfig
                 _errors.Add($"{at}: empty");
                 return null;
         }
+    }
+
+    /// <summary>"Chats:0:Id: msg" -> "TGMCP_Chats__0__Id: msg" so errors name the variable the owner set.</summary>
+    private static string EnvForm(string error)
+    {
+        var i = error.IndexOf(": ", StringComparison.Ordinal);
+        return i <= 0 ? error : Prefix + error[..i].Replace(":", "__", StringComparison.Ordinal) + error[i..];
     }
 
     private void Unknown(string key) => _errors.Add($"{key}: unknown key");
