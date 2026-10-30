@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest a change or improvement.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do, and what gets in the way today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: How should it work? Example config or tool calls are welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: policy
+    attributes:
+      label: Policy keys and security impact
+      description: |
+        Which policy keys would control it (new or existing)? What could go wrong if the assistant misused it
+        or a message tried to trick it? Remember: deny by default, deny rules always win.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

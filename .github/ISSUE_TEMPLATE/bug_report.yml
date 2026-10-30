@@ -1,0 +1,72 @@
+name: Bug report
+description: Something does not work as documented.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! **Security vulnerabilities must not be reported here**: use the
+        Security tab -> "Report a vulnerability" instead.
+
+        Never paste api_id, api_hash, the database key, session files, message content or real chat ids.
+        Replace ids with placeholders such as `-1001234567890` and usernames with `example_channel`.
+  - type: checkboxes
+    id: redacted
+    attributes:
+      label: Redaction
+      options:
+        - label: I removed api_id/api_hash/session/database key and real chat ids from everything below.
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Image tag, release version or commit SHA.
+      placeholder: "0.1.0 / tgmcp:3256f3b"
+    validations:
+      required: true
+  - type: textarea
+    id: run
+    attributes:
+      label: How you run it
+      description: The docker run / claude mcp add command, with paths and secrets redacted.
+      render: shell
+      placeholder: |
+        docker run -i --rm --read-only --cap-drop ALL --security-opt no-new-privileges --tmpfs /tmp \
+          --env-file <redacted> -v <redacted>:/config/tgmcp.json:ro -v tgmcp-data:/data tgmcp:<tag>
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Config excerpt
+      description: The relevant part of tgmcp.json and any TGMCP_ overrides (no secrets, ids redacted). `tgmcp config check` output is very helpful.
+      render: jsonc
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Call read_messages with chat -1001234567890
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include the tool result or error text (redacted).
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (stderr)
+      description: Server logs go to stderr and never contain message text. Redact ids anyway.
+      render: text

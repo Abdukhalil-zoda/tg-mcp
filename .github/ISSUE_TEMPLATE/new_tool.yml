@@ -1,0 +1,56 @@
+name: New tool proposal
+description: Propose a new MCP tool (read or write).
+labels: ["new-tool"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Tools that will not be accepted: payments/Stars/gifts, bot buttons and inline queries, account, privacy,
+        2FA or session settings, joining/leaving/deleting chats, admin actions, Business settings, contact export,
+        and bulk operations.
+  - type: input
+    id: name
+    attributes:
+      label: Tool name
+      placeholder: react_message
+    validations:
+      required: true
+  - type: textarea
+    id: tdlib
+    attributes:
+      label: TDLib method(s)
+      description: The TDLib functions and updates involved (see https://core.telegram.org/tdlib/docs/).
+      placeholder: setMessageReaction / addMessageReaction
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Read or write
+      options:
+        - Read (returns data)
+        - Write (changes something in Telegram)
+    validations:
+      required: true
+  - type: textarea
+    id: gating
+    attributes:
+      label: Required policy feature / flag
+      description: Global switch (features.x), per-chat feature or write mode, limits.
+      placeholder: 'features.react + chat rule "features": ["react"]'
+    validations:
+      required: true
+  - type: textarea
+    id: abuse
+    attributes:
+      label: Abuse risks
+      description: How could a prompt injection or a mistaken assistant misuse it? How do the gates prevent that?
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: Test plan
+      description: Gating cases with the fake Telegram client, audit (no content), docs.
+    validations:
+      required: true

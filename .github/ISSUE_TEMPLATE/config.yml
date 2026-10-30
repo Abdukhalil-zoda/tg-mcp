@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/Abdukhalil-zoda/tg-mcp/security/policy
+    about: Please report vulnerabilities privately, not as public issues.
+  - name: Documentation (wiki)
+    url: https://github.com/Abdukhalil-zoda/tg-mcp/wiki
+    about: Installation, configuration, policy cookbook, troubleshooting.
+  - name: Questions and ideas (Discussions)
+    url: https://github.com/Abdukhalil-zoda/tg-mcp/discussions
+    about: Ask questions or discuss ideas (if Discussions are enabled).
