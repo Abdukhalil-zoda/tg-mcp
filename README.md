@@ -69,8 +69,16 @@ TgMcp can push new Telegram messages into the assistant's session as they arrive
 - starts Telegram at startup (if logged in) and listens to TDLib `updateNewMessage`;
 - sends a `notifications/claude/channel` notification for each eligible message, with params `{ "content": "...", "meta": { ... } }`. Claude Code shows it as `<channel source="<server name>" chat_id="…" …>content</channel>`.
 
-<!-- TODO(owner): how to enable channels for this MCP server in Claude Code (exact CLI flag / setting). -->
-How to enable channels in Claude Code: *to be documented*.
+**Enabling channels in Claude Code.** Channels are a Claude Code research preview. A server only delivers events to a session that names it at startup. A self-hosted server like this one is not on Anthropic's channel allowlist, so it needs the development flag (Claude Code shows a one-time warning that you must confirm in the terminal):
+
+```sh
+# the server registered as "tg" via `claude mcp add tg -- docker run -i ...`
+claude --dangerously-load-development-channels server:tg
+# together with an allowlisted channel plugin:
+claude --channels plugin:telegram@claude-plugins-official --dangerously-load-development-channels server:tg
+```
+
+Events arrive as `<channel source="tg" chat_id="..." message_id="..." ...>` blocks. Delivery is fire-and-forget: if the session was not started with the flag (or your organization disables channels via `channelsEnabled`), events are silently dropped. See the [channels reference](https://code.claude.com/docs/en/channels-reference.md).
 
 **When an event is emitted.** All of these must hold:
 
