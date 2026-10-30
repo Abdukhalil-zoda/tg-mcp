@@ -6,7 +6,7 @@ using TgMcp.Application.Audit;
 
 namespace TgMcp.Server.Hosting;
 
-/// <summary>Appends audit records as JSON lines. Write failures are logged to stderr and never thrown.</summary>
+/// <summary>Appends audit records as JSON lines. Failures are logged to stderr, reported as false and never thrown.</summary>
 public sealed partial class JsonlAuditSink : IAuditSink
 {
     private static readonly JsonSerializerOptions Json = new()
@@ -27,10 +27,29 @@ public sealed partial class JsonlAuditSink : IAuditSink
     }
 
     /// <inheritdoc />
-    public void Write(AuditEntry entry)
+    public bool IsAvailable()
+    {
+        try
+        {
+            lock (_lock)
+            {
+                if (Path.GetDirectoryName(_path) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
+                using var _ = new FileStream(_path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+            }
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            LogFailed(_path, e.Message);
+            return false;
+        }
+    }
+
+    /// <inheritdoc />
+    public bool Write(AuditEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        Append(new Dictionary<string, object?>
+        return Append(new Dictionary<string, object?>
         {
             ["ts"] = entry.TimeUtc.UtcDateTime.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
             ["tool"] = entry.Tool,
@@ -43,7 +62,7 @@ public sealed partial class JsonlAuditSink : IAuditSink
     }
 
     /// <inheritdoc />
-    public void WriteEvent(string name, IReadOnlyDictionary<string, object?> fields)
+    public bool WriteEvent(string name, IReadOnlyDictionary<string, object?> fields)
     {
         ArgumentNullException.ThrowIfNull(fields);
         var row = new Dictionary<string, object?>
@@ -52,10 +71,10 @@ public sealed partial class JsonlAuditSink : IAuditSink
             ["event"] = name,
         };
         foreach (var (k, v) in fields) row[k] = v;
-        Append(row);
+        return Append(row);
     }
 
-    private void Append(Dictionary<string, object?> row)
+    private bool Append(Dictionary<string, object?> row)
     {
         var line = JsonSerializer.Serialize(row, Json) + "\n";
         try
@@ -65,10 +84,12 @@ public sealed partial class JsonlAuditSink : IAuditSink
                 if (Path.GetDirectoryName(_path) is { Length: > 0 } dir) Directory.CreateDirectory(dir);
                 File.AppendAllText(_path, line);
             }
+            return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
             LogFailed(_path, e.Message);
+            return false;
         }
     }
 

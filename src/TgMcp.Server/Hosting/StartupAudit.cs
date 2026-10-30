@@ -24,7 +24,7 @@ public sealed partial class StartupAudit : IHostedService
     public Task StartAsync(CancellationToken cancellationToken)
     {
         var c = _policy.Config;
-        _audit.WriteEvent("start", new Dictionary<string, object?>
+        var written = _audit.WriteEvent("start", new Dictionary<string, object?>
         {
             ["version"] = typeof(StartupAudit).Assembly.GetName().Version?.ToString(3),
             ["config_sha256"] = c.Sha256,
@@ -33,6 +33,7 @@ public sealed partial class StartupAudit : IHostedService
             ["errors"] = c.Errors,
         });
         LogStart(c.Sha256, c.IsValid, c.Enabled);
+        if (!written) LogAuditUnavailable();
         foreach (var e in c.Errors) LogConfigError(e);
         if (!c.IsValid) LogDenyAll();
         return Task.CompletedTask;
@@ -46,6 +47,9 @@ public sealed partial class StartupAudit : IHostedService
 
     [LoggerMessage(Level = LogLevel.Error, Message = "config error: {Error}")]
     private partial void LogConfigError(string error);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "audit log is not writable: every tool call will be denied until it is")]
+    private partial void LogAuditUnavailable();
 
     [LoggerMessage(Level = LogLevel.Error, Message = "configuration is invalid: every tool call will be denied")]
     private partial void LogDenyAll();

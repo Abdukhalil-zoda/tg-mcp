@@ -409,6 +409,30 @@ public class ToolTests
     }
 
     [Fact]
+    public async Task Unavailable_audit_denies_before_any_telegram_call()
+    {
+        var h = H(("Defaults__Read", "true"));
+        h.Audit.Available = false;
+        var r = await h.Read.RunAsync("111", 10, 0, Ct);
+        Assert.True(r.IsError);
+        Assert.Equal(ToolRunner.AuditUnavailable, r.Text);
+        Assert.Equal(0, h.Telegram.ReadyCalls);
+        Assert.Equal(0, h.Telegram.Calls);
+    }
+
+    [Fact]
+    public async Task Failed_audit_write_withholds_the_result()
+    {
+        var h = H(("Defaults__Read", "true"));
+        h.Audit.FailWrites = true;
+        var r = await h.Read.RunAsync("111", 10, 0, Ct);
+        Assert.True(r.IsError);
+        Assert.Equal(ToolRunner.AuditUnavailable, r.Text);
+        Assert.DoesNotContain("hello", r.Text, StringComparison.Ordinal);
+        Assert.Empty(h.Audit.Entries);
+    }
+
+    [Fact]
     public async Task Telegram_errors_are_reported_and_audited()
     {
         var h = H(("Defaults__Read", "true"));

@@ -8,5 +8,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/TgMcp.Domain.Tests/TgMcp.Domain.Tests.csproj" />
     <Project Path="tests/TgMcp.Application.Tests/TgMcp.Application.Tests.csproj" />
+    <Project Path="tests/TgMcp.Infrastructure.Tests/TgMcp.Infrastructure.Tests.csproj" />
   </Folder>
 </Solution>

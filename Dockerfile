@@ -18,6 +18,7 @@ COPY src/TgMcp.Server/TgMcp.Server.csproj src/TgMcp.Server/
 COPY tests/Directory.Build.props tests/
 COPY tests/TgMcp.Domain.Tests/TgMcp.Domain.Tests.csproj tests/TgMcp.Domain.Tests/
 COPY tests/TgMcp.Application.Tests/TgMcp.Application.Tests.csproj tests/TgMcp.Application.Tests/
+COPY tests/TgMcp.Infrastructure.Tests/TgMcp.Infrastructure.Tests.csproj tests/TgMcp.Infrastructure.Tests/
 RUN dotnet restore TgMcp.slnx
 COPY src/ src/
 COPY tests/ tests/

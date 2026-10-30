@@ -17,12 +17,15 @@ public sealed record AuditEntry(
     string Rule,
     string Reason);
 
-/// <summary>Append-only audit trail.</summary>
+/// <summary>Append-only audit trail. Tool calls fail closed when it cannot be written.</summary>
 public interface IAuditSink
 {
-    /// <summary>Appends one record. Implementations must not throw.</summary>
-    void Write(AuditEntry entry);
+    /// <summary>True if a record can be appended right now (checked before any Telegram call). Must not throw.</summary>
+    bool IsAvailable();
 
-    /// <summary>Appends a startup/lifecycle event with free-form fields (no secrets).</summary>
-    void WriteEvent(string name, IReadOnlyDictionary<string, object?> fields);
+    /// <summary>Appends one record; false if it could not be persisted. Must not throw.</summary>
+    bool Write(AuditEntry entry);
+
+    /// <summary>Appends a startup/lifecycle event with free-form fields (no secrets); false on failure. Must not throw.</summary>
+    bool WriteEvent(string name, IReadOnlyDictionary<string, object?> fields);
 }

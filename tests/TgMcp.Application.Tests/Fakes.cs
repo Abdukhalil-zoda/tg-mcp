@@ -106,8 +106,19 @@ internal sealed class FakeTelegram : ITelegramClient
 internal sealed class MemoryAudit : IAuditSink
 {
     public List<AuditEntry> Entries { get; } = [];
-    public void Write(AuditEntry entry) => Entries.Add(entry);
-    public void WriteEvent(string name, IReadOnlyDictionary<string, object?> fields) { }
+    public bool Available { get; set; } = true;
+    public bool FailWrites { get; set; }
+
+    public bool IsAvailable() => Available;
+
+    public bool Write(AuditEntry entry)
+    {
+        if (FailWrites) return false;
+        Entries.Add(entry);
+        return true;
+    }
+
+    public bool WriteEvent(string name, IReadOnlyDictionary<string, object?> fields) => !FailWrites;
 }
 
 internal sealed class MemoryMediaStore : IMediaStore

@@ -11,6 +11,9 @@ namespace TgMcp.Application.Tools;
 /// </summary>
 public sealed partial class ToolRunner
 {
+    /// <summary>Error returned when the audit log cannot be written.</summary>
+    public const string AuditUnavailable = "denied: the audit log cannot be written, so no Telegram data is returned (the operator must check the audit path)";
+
     private readonly IPolicy _policy;
     private readonly ITelegramClient _client;
     private readonly IRateLimiter _rate;
@@ -36,6 +39,12 @@ public sealed partial class ToolRunner
     public async Task<ToolResult> RunAsync(string tool, Need[] globalNeeds, Func<CancellationToken, Task<ToolOutcome>> body, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(body);
+        // Fail closed: without a writable audit log nothing reaches Telegram.
+        if (!_audit.IsAvailable())
+        {
+            LogAuditFailed(tool, "before the call");
+            return ToolResult.Error(AuditUnavailable);
+        }
         ToolOutcome outcome;
         if (!_rate.TryAcquire())
         {
@@ -50,8 +59,13 @@ public sealed partial class ToolRunner
         {
             outcome = await Execute(body, ct).ConfigureAwait(false);
         }
-        _audit.Write(new AuditEntry(_time.GetUtcNow(), tool, outcome.ChatId, outcome.Count, outcome.Allowed, outcome.Rule, outcome.Reason));
         LogCall(tool, outcome.ChatId, outcome.Count, outcome.Allowed, outcome.Rule, outcome.Reason);
+        if (!_audit.Write(new AuditEntry(_time.GetUtcNow(), tool, outcome.ChatId, outcome.Count, outcome.Allowed, outcome.Rule, outcome.Reason)))
+        {
+            // The result is withheld: data must never leave without an audit record.
+            LogAuditFailed(tool, "after the call; result withheld");
+            return ToolResult.Error(AuditUnavailable);
+        }
         return outcome.Result;
     }
 
@@ -80,6 +94,9 @@ public sealed partial class ToolRunner
             return new(ToolResult.Error("local storage error"), null, 0, true, "storage", e.GetType().Name);
         }
     }
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "audit write failed for tool {Tool} ({When}); call denied")]
+    private partial void LogAuditFailed(string tool, string when);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "tool {Tool} chat={ChatId} count={Count} allowed={Allowed} rule={Rule} reason={Reason}")]
     private partial void LogCall(string tool, long? chatId, int count, bool allowed, string rule, string reason);
