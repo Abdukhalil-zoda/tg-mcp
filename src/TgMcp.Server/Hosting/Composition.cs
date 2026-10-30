@@ -73,6 +73,7 @@ public static class Composition
         services.AddSingleton<SearchAllTool>();
         services.AddSingleton<DownloadMediaTool>();
         services.AddHostedService<StartupAudit>();
+        services.AddHostedService<MediaCleanupOnStart>();
         return services;
     }
 }

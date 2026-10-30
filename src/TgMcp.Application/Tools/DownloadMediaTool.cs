@@ -33,6 +33,7 @@ public sealed class DownloadMediaTool
             if (media.Size <= 0) return ToolOutcome.Refused("file size is unknown, so it is refused (TGMCP_Limits__MaxMediaMb)", target.Id, d.Rule);
             if (media.Size > cap) return ToolOutcome.Refused($"file is {media.Size} bytes, over TGMCP_Limits__MaxMediaMb={_c.Policy.Config.MaxMediaMb}", target.Id, d.Rule);
 
+            _store.Cleanup(_c.Policy.Config.MediaRetentionDays);
             var file = await _c.Telegram.DownloadFileAsync(media.FileId, token).ConfigureAwait(false);
             if (!file.Completed || file.LocalPath is null) return ToolOutcome.Failed("download did not complete", target.Id, d.Rule);
             if (file.Size > cap) return ToolOutcome.Refused("downloaded file is over TGMCP_Limits__MaxMediaMb", target.Id, d.Rule);

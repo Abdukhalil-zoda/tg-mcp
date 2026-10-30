@@ -106,6 +106,9 @@ public sealed class PolicyConfig
     /// <summary>Limits__MaxMediaMb.</summary>
     public int MaxMediaMb { get; private set; } = 50;
 
+    /// <summary>Limits__MediaRetentionDays: downloaded media older than this is deleted (0 = keep forever).</summary>
+    public int MediaRetentionDays { get; private set; } = 7;
+
     /// <summary>Validation errors (key names, never secret values).</summary>
     public IReadOnlyList<string> Errors => _errors;
     /// <summary>True if there are no errors.</summary>
@@ -199,6 +202,7 @@ public sealed class PolicyConfig
                         case "maxmessagespercall": MaxMessagesPerCall = Positive(key, value) ?? MaxMessagesPerCall; break;
                         case "rateperminute": RatePerMinute = Positive(key, value) ?? RatePerMinute; break;
                         case "maxmediamb": MaxMediaMb = Positive(key, value) ?? MaxMediaMb; break;
+                        case "mediaretentiondays": MediaRetentionDays = NonNegative(key, value) ?? MediaRetentionDays; break;
                         default: Unknown(key); break;
                     }
                     break;
@@ -341,6 +345,13 @@ public sealed class PolicyConfig
         return null;
     }
 
+    private int? NonNegative(string key, string v)
+    {
+        if (int.TryParse(v.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var n) && n >= 0) return n;
+        _errors.Add($"{key}: expected an integer >= 0");
+        return null;
+    }
+
     private IReadOnlySet<Feature> FeatureList(string key, string v)
     {
         var set = new HashSet<Feature>();
@@ -381,7 +392,7 @@ public sealed class PolicyConfig
         foreach (var r in Chats)
             sb.Append($"{r.Label} read={r.Read?.ToString().ToLowerInvariant() ?? "-"} write={(r.Write is WriteMode w ? Names.Snake(w) : "-")} features={F(r.Features)} since_days={r.SinceDays?.ToString(CultureInfo.InvariantCulture) ?? "-"} topics={(r.Topics is null ? "-" : string.Join(",", r.Topics.Order()))}\n");
         foreach (var d in Denies) sb.Append($"{d.Label}\n");
-        sb.Append($"limits list_chats={Names.Snake(ListChats)} max_messages_per_call={MaxMessagesPerCall} rate_per_minute={RatePerMinute} max_media_mb={MaxMediaMb}\n");
+        sb.Append($"limits list_chats={Names.Snake(ListChats)} max_messages_per_call={MaxMessagesPerCall} rate_per_minute={RatePerMinute} max_media_mb={MaxMediaMb} media_retention_days={MediaRetentionDays}\n");
         return sb.ToString();
     }
 

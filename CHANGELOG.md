@@ -14,6 +14,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
 ### Added
 - `TGMCP_MediaDir` (default `/data/media`) to bind-mount a host folder for downloads, and
   `TGMCP_MediaHostDir` to report the matching host path in `download_media` results.
+- `TGMCP_Limits__MediaRetentionDays` (default 7, 0 disables): old media is deleted at startup and
+  before each download.
 
 ## [0.1.0] - 2026-10-30
 

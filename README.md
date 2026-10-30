@@ -36,7 +36,7 @@ TgMcp is a third-party Telegram client built on TDLib with **your own** `api_id`
 | `get_message` | read | Denied if the message is older than `SinceDays` or outside `Topics`. |
 | `search_chat` | read + `search` | Text search in one chat. |
 | `search_all` | read + `search` | Global search. Results from chats without read + search are silently dropped. |
-| `download_media` | read + `media_download` | Size-capped by `MaxMediaMb`. Files of unknown size are refused. Files go to `/data/media`. |
+| `download_media` | read + `media_download` | Size-capped by `MaxMediaMb`. Files of unknown size are refused. Files go to `MediaDir` (default `/data/media`) and are deleted after `MediaRetentionDays`. |
 
 Each message is returned as `{chat, id, date_utc, sender, from_me, text, has_media}`. The `chat` argument takes a numeric chat id (as shown by `list_chats`) or a public `@username`.
 
@@ -113,6 +113,7 @@ All keys are environment variables with the prefix `TGMCP_`. Use `__` for nestin
 | `Limits__MaxMessagesPerCall` | integer ≥ 1 | `200` |
 | `Limits__RatePerMinute` | integer ≥ 1 (one token bucket per process) | `30` |
 | `Limits__MaxMediaMb` | integer ≥ 1 | `50` |
+| `Limits__MediaRetentionDays` | integer ≥ 0. Downloaded media older than this is deleted at startup and before each download. `0` keeps files forever. | `7` |
 
 Features, in lowercase snake_case: `search`, `media_download`, `summarize`, `translate`, `react`, `mark_read`, `edit_own`, `delete_own`, `forward`, `pin`. Version 0.1 uses only `search` and `media_download`. The others are parsed and validated, and reserved for later versions.
 
@@ -188,7 +189,6 @@ Image: `mcr.microsoft.com/dotnet/runtime:11.0.0-rc.3`, framework-dependent publi
 ## Limitations
 
 - Read-only. There are no write tools yet, so `Write` modes are parsed and reported but have no effect.
-- Media in `/data/media` isn't cleaned up automatically yet. Planned: delete files after 7 days.
 - `summarize` and `translate` are reserved. They will probably need Telegram Premium server-side features.
 - Login supports phone, code and 2FA password only. Email-code login, registering a new account and QR login aren't supported. Log in with an official app first if Telegram asks for these.
 - TDLib native binaries are linux-x64 only (`tdlib.native.linux-x64`).

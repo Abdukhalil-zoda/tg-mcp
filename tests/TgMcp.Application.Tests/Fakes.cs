@@ -124,6 +124,13 @@ internal sealed class MemoryAudit : IAuditSink
 internal sealed class MemoryMediaStore : IMediaStore
 {
     public string? HostDir { get; set; }
+    public List<int> Cleanups { get; } = [];
+
+    public int Cleanup(int retentionDays)
+    {
+        Cleanups.Add(retentionDays);
+        return 0;
+    }
 
     public Task<StoredMedia> StoreAsync(string sourcePath, long chatId, long messageId, string? fileName, CancellationToken ct)
     {

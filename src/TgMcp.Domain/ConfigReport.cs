@@ -17,7 +17,7 @@ public static class ConfigReport
         yield return c.Enabled ? "enabled: true" : "enabled: false -> everything is denied (set TGMCP_Enabled=true)";
         var on = Enum.GetValues<GlobalSwitch>().Where(c.Switches.Contains).Select(s => s.ToString()).ToList();
         yield return $"global switches on: {(on.Count == 0 ? "(none)" : string.Join(", ", on))}";
-        yield return $"limits: list_chats={Names.Snake(c.ListChats)} max_messages_per_call={c.MaxMessagesPerCall} rate_per_minute={c.RatePerMinute} max_media_mb={c.MaxMediaMb}";
+        yield return $"limits: list_chats={Names.Snake(c.ListChats)} max_messages_per_call={c.MaxMessagesPerCall} rate_per_minute={c.RatePerMinute} max_media_mb={c.MaxMediaMb} media_retention_days={(c.MediaRetentionDays == 0 ? "off" : c.MediaRetentionDays)}";
         yield return "deny rules (always win):" + (c.Denies.Count == 0 ? " (none)" : "");
         foreach (var d in c.Denies) yield return $"  {d.Label}";
         yield return "chat rules (first match wins; unset keys fall back to defaults):" + (c.Chats.Count == 0 ? " (none)" : "");

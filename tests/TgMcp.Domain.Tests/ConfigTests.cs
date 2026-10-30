@@ -21,6 +21,7 @@ public class ConfigTests
         Assert.Equal(200, c.MaxMessagesPerCall);
         Assert.Equal(30, c.RatePerMinute);
         Assert.Equal(50, c.MaxMediaMb);
+        Assert.Equal(7, c.MediaRetentionDays);
         var d = new PolicyEngine(c).Check(Friend, Need.Read);
         Assert.False(d.Allowed);
         Assert.Contains("TGMCP_Enabled", d.Reason, StringComparison.Ordinal);
@@ -111,6 +112,18 @@ public class ConfigTests
     [InlineData("Limits__MaxMessagesPerCall", "1.5")]
     public void Bad_enum_or_number_is_an_error(string key, string value) =>
         Assert.False(PolicyConfig.FromPairs((key, value)).IsValid);
+
+    [Theory]
+    [InlineData("0", true, 0)]
+    [InlineData("30", true, 30)]
+    [InlineData("-1", false, 7)]
+    [InlineData("week", false, 7)]
+    public void Media_retention_days(string value, bool valid, int expected)
+    {
+        var c = PolicyConfig.FromPairs(("Limits__MediaRetentionDays", value));
+        Assert.Equal(valid, c.IsValid);
+        Assert.Equal(expected, c.MediaRetentionDays);
+    }
 
     [Fact]
     public void Master_switch_off_denies_even_with_rules()

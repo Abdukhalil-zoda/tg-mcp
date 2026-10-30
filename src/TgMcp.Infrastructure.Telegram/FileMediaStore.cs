@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TgMcp.Application.Telegram;
 
@@ -5,18 +6,59 @@ namespace TgMcp.Infrastructure.Telegram;
 
 /// <summary>
 /// Copies downloaded files to <c>{MediaDir}/{chat}_{message}_{name}</c> (default MediaDir: {DataDir}/media).
-/// TODO: delete files older than 7 days (planned for a later version).
+/// Files older than the retention period are deleted by <see cref="Cleanup"/>.
 /// </summary>
-public sealed class FileMediaStore : IMediaStore
+public sealed partial class FileMediaStore : IMediaStore
 {
     private readonly TelegramOptions _o;
+    private readonly TimeProvider _time;
+    private readonly ILogger<FileMediaStore> _log;
 
     /// <summary>Creates the store.</summary>
-    public FileMediaStore(IOptions<TelegramOptions> options)
+    public FileMediaStore(IOptions<TelegramOptions> options, TimeProvider time, ILogger<FileMediaStore> log)
     {
         ArgumentNullException.ThrowIfNull(options);
         _o = options.Value;
+        _time = time;
+        _log = log;
     }
+
+    /// <inheritdoc />
+    public int Cleanup(int retentionDays)
+    {
+        var dir = _o.EffectiveMediaDir;
+        if (retentionDays <= 0 || !Directory.Exists(dir)) return 0;
+        var cutoff = _time.GetUtcNow().UtcDateTime - TimeSpan.FromDays(retentionDays);
+        var deleted = 0;
+        try
+        {
+            foreach (var file in new DirectoryInfo(dir).EnumerateFiles())
+            {
+                if (file.LastWriteTimeUtc >= cutoff) continue;
+                try
+                {
+                    file.Delete();
+                    deleted++;
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    LogDeleteFailed(file.Name, e.Message);
+                }
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            LogDeleteFailed(dir, e.Message);
+        }
+        if (deleted > 0) LogDeleted(deleted, retentionDays);
+        return deleted;
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "media cleanup deleted {Count} file(s) older than {Days} day(s)")]
+    private partial void LogDeleted(int count, int days);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "media cleanup could not delete {Name}: {Error}")]
+    private partial void LogDeleteFailed(string name, string error);
 
     /// <inheritdoc />
     public async Task<StoredMedia> StoreAsync(string sourcePath, long chatId, long messageId, string? fileName, CancellationToken ct)

@@ -120,6 +120,9 @@ public interface IMediaStore
 {
     /// <summary>Copies a downloaded file into the media store.</summary>
     Task<StoredMedia> StoreAsync(string sourcePath, long chatId, long messageId, string? fileName, CancellationToken ct);
+
+    /// <summary>Deletes stored files older than <paramref name="retentionDays"/> days (0 = do nothing); returns how many. Must not throw.</summary>
+    int Cleanup(int retentionDays);
 }
 
 /// <summary>Maps media paths between the container and the host (pure string mapping).</summary>

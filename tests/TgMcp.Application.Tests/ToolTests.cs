@@ -409,6 +409,15 @@ public class ToolTests
     }
 
     [Fact]
+    public async Task Download_media_applies_retention_before_downloading()
+    {
+        var h = H(("Chats__0__Id", "-100222"), ("Chats__0__Read", "true"), ("Chats__0__Features", "media_download"),
+                  ("Limits__MediaRetentionDays", "3"));
+        await h.Download.RunAsync("-100222", 14, Ct);
+        Assert.Equal([3], h.Media.Cleanups);
+    }
+
+    [Fact]
     public async Task Download_media_reports_host_path_when_configured()
     {
         var h = H(("Chats__0__Id", "-100222"), ("Chats__0__Read", "true"), ("Chats__0__Features", "media_download"));
