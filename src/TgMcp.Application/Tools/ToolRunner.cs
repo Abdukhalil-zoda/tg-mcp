@@ -75,6 +75,10 @@ public sealed partial class ToolRunner
         {
             return new(ToolResult.Error($"bad argument: {e.Message}"), null, 0, true, "arguments", "bad argument");
         }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return new(ToolResult.Error("local storage error"), null, 0, true, "storage", e.GetType().Name);
+        }
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "tool {Tool} chat={ChatId} count={Count} allowed={Allowed} rule={Rule} reason={Reason}")]
