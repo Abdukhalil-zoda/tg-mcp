@@ -75,6 +75,8 @@
     "features": [],         // per-chat features: "search", "media_download" (+ reserved: "summarize",
                             // "translate", "react", "mark_read", "edit_own", "delete_own", "forward", "pin")
     "sinceDays": null,      // hide messages older than N days; null = no limit
+    "notify": false,        // push new messages as events (see "events"); needs "read": true.
+                            // Never applies to bot/channel chats or bot senders: those need an explicit rule.
   },
 
   // Allow rules. The FIRST matching rule wins, so put specific rules before general ones.
@@ -86,12 +88,14 @@
   // Permission keys (all optional, missing = taken from "defaults"):
   //   "read" (bool), "write" ("off"|"draft"|"on"), "features" (list), "sinceDays" (number >= 1),
   //   "topics" (list of forum topic ids; empty or missing = all topics; also limits where messages may be sent)
+  //   "notify" (bool): new messages in this chat are pushed to the assistant as events (needs "read": true
+  //                    and "events.enabled": true)
   // "write" needs "features.send": true. Messages are sent from YOUR account; "draft" is the safe choice:
   // the assistant only saves a draft and you send it yourself with `tgmcp approve <id>` (or `tgmcp reject <id>`).
   // An empty list is valid:  "chats": []  (then only "defaults" apply).
   "chats": [
     // Read-only access to one group by id.
-    { "id": -1001234567890, "name": "Work group", "read": true },
+    { "id": -1001234567890, "name": "Work group", "read": true, "notify": true },
 
     // A public channel by username, with search.
     { "username": "example_channel", "name": "Example channel", "read": true, "features": ["search"] },
@@ -126,6 +130,17 @@
     "maxMediaMb": 50,            // largest file download_media will fetch, >= 1
     "sendsPerMinute": 10,        // send_message calls (sent or drafted) per chat per minute, >= 1
     "mediaRetentionDays": 7,     // delete downloaded media older than N days; 0 = keep forever
+  },
+
+  // Inbound events: new messages from chats with "notify": true are pushed into the assistant's session
+  // (MCP channel notifications) instead of being polled. Message content is untrusted third-party data.
+  // When enabled, the server starts Telegram at startup and keeps the database open (one process per data dir).
+  "events": {
+    "enabled": false,         // master switch for events
+    "includeOutgoing": false, // also push your own messages
+    "maxPerMinute": 30,       // more are dropped, with one "N more messages dropped" summary per minute
+    "maxTextChars": 4000,     // longer texts are truncated
+    "catchUpMinutes": 0,      // on start, replay messages missed in the last N minutes (max 50); 0 = off
   },
 
   // Where download_media puts files (inside the container). Optional.

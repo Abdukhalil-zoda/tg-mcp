@@ -6,6 +6,14 @@ and the project uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Inbound events: with `events.enabled`, new messages from chats with `"notify": true` (requires `read`)
+  are pushed as `notifications/claude/channel` (experimental `claude/channel` capability), with an
+  untrusted-data marker, truncation (`events.maxTextChars`), media descriptions, string meta including
+  `write_mode`, a rate limit with drop summaries (`events.maxPerMinute`), optional catch-up
+  (`events.catchUpMinutes`, state in `/data/events-state.json`) and text-free audit records.
+  Bot/channel chats and bot senders need an explicit rule. TDLib starts eagerly when events are on.
+- Server `instructions` describing the untrusted-data rules and how to reply.
+- Media in message text is described with names and durations (`[document report.pdf]`, `[voice 12s]`).
 - `send_message`: plain-text messages as the owner. `"write": "on"` sends and waits for Telegram's
   confirmation; `"draft"` saves an owner-only draft in `/data/drafts`; `"off"` is denied with a JSON hint.
   Topics restrict where messages may go; `limits.sendsPerMinute` (default 10) limits sends per chat;
