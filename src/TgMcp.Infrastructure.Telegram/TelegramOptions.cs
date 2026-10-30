@@ -66,7 +66,7 @@ public sealed class TelegramOptions
     public string? Problem()
     {
         if (ParsedApiId <= 0 || string.IsNullOrWhiteSpace(ApiHash))
-            return "TGMCP_ApiId/TGMCP_ApiHash are not set (the owner must provide api.env)";
+            return "TGMCP_ApiId/TGMCP_ApiHash are not set (the owner must provide them in the env file)";
         if (ResolveDatabaseKey().Length == 0)
             return "TGMCP_DatabaseKey or TGMCP_DatabaseKeyFile is not set";
         return null;
