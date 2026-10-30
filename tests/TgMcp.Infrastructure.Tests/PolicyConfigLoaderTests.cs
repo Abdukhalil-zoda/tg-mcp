@@ -146,6 +146,27 @@ public sealed class PolicyConfigLoaderTests : IDisposable
         Assert.True(d.TopicOk(99));
     }
 
+    [Theory]
+    [InlineData("""{ "enabled": true, "deny": [] }""")]
+    [InlineData("""{ "enabled": true, "chats": [] }""")]
+    [InlineData("""{ "enabled": true, "chats": [], "deny": [], "defaults": { "features": [] } }""")]
+    [InlineData("""{ "enabled": true, "chats": [ { "id": 1, "features": [], "topics": [] } ] }""")]
+    public void Empty_arrays_mean_no_entries(string json)
+    {
+        var c = Load(json).Policy;
+        Assert.True(c.IsValid, string.Join("; ", c.Errors));
+        Assert.Empty(c.Denies);
+        Assert.Empty(c.DefaultFeatures);
+        Assert.All(c.Chats, r => { Assert.Empty(r.Features!); Assert.Null(r.Topics); });
+    }
+
+    [Fact]
+    public void Empty_deny_list_denies_nothing_and_empty_chats_use_defaults()
+    {
+        var c = Load("""{ "enabled": true, "features": { "read": true }, "defaults": { "read": true }, "chats": [], "deny": [] }""").Policy;
+        Assert.True(new PolicyEngine(c).Check(Work, Need.Read).Allowed);
+    }
+
     [Fact]
     public void Name_and_note_are_never_used_for_matching()
     {

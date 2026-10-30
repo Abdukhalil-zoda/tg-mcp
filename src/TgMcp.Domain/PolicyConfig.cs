@@ -361,6 +361,8 @@ public sealed class PolicyConfig
                         default: Unknown(key); break;
                     }
                     break;
+                case "chats" or "deny" when p.Length == 1 && value.Trim().Length == 0:
+                    break; // an empty JSON array: no rules
                 case "chats" or "deny" when p.Length == 3:
                     if (!int.TryParse(p[1], NumberStyles.None, CultureInfo.InvariantCulture, out var idx) || idx > 9999)
                     {

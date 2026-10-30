@@ -86,6 +86,7 @@
   // Permission keys (all optional, missing = taken from "defaults"):
   //   "read" (bool), "write" ("off"|"draft"|"on"), "features" (list), "sinceDays" (number >= 1),
   //   "topics" (list of forum topic ids; empty or missing = all topics)
+  // An empty list is valid:  "chats": []  (then only "defaults" apply).
   "chats": [
     // Read-only access to one group by id.
     { "id": -1001234567890, "name": "Work group", "read": true },
@@ -108,6 +109,7 @@
   // Hard blocks. ALWAYS win over "chats" and "defaults". Exactly one selector per rule:
   //   "id" | "username" | "type" ("private" | "group" | "channel" | "bot") | "folder" (chat folder title)
   // A denied chat is never shown, and the assistant only ever sees "denied by policy" for it.
+  // An empty list is valid:  "deny": []  (nothing is hard-blocked; not recommended).
   "deny": [
     { "type": "bot", "name": "All bots (banks, services with login codes)" },
     { "id": 777000, "name": "Telegram service notifications (login codes!)" },

@@ -5,6 +5,10 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Empty JSON arrays (`"deny": []`, `"chats": []`, empty `features`/`topics`) are accepted as "no entries"
+  instead of making the config invalid.
+
 ### Changed
 - **The policy is now a JSON file** (`TGMCP_ConfigFile`, default `/config/tgmcp.json`; comments and
   trailing commas allowed) with camelCase keys, lists as JSON arrays and optional `name`/`note` labels
