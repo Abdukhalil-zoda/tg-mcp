@@ -14,9 +14,10 @@ services:
     cpus: 0.25
     tmpfs: [/tmp]
     env_file:
-      - ./api.env     # secrets (from api.env.example)
-      - ./tgmcp.env   # policy (from tgmcp.env.example)
+      - ./tgmcp.env            # secrets + optional overrides (from tgmcp.env.example)
     volumes:
+      # Policy (from tgmcp.example.jsonc); must be readable by uid 1654: chown root:1654, chmod 0640.
+      - ./tgmcp.json:/config/tgmcp.json:ro
       - tgmcp-data:/data
 volumes:
   tgmcp-data:
