@@ -78,7 +78,7 @@ public sealed class PolicyConfig
     /// <summary>Non-policy keys the process itself reads. Their values are never logged or hashed.</summary>
     public static readonly IReadOnlySet<string> RuntimeKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "ApiId", "ApiHash", "DatabaseKey", "DatabaseKeyFile", "AuditPath", "DataDir",
+        "ApiId", "ApiHash", "DatabaseKey", "DatabaseKeyFile", "AuditPath", "DataDir", "MediaDir", "MediaHostDir",
     };
 
     /// <summary>Master switch (default false = deny all).</summary>

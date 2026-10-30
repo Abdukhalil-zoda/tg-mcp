@@ -36,11 +36,11 @@ public sealed class DownloadMediaTool
             var file = await _c.Telegram.DownloadFileAsync(media.FileId, token).ConfigureAwait(false);
             if (!file.Completed || file.LocalPath is null) return ToolOutcome.Failed("download did not complete", target.Id, d.Rule);
             if (file.Size > cap) return ToolOutcome.Refused("downloaded file is over TGMCP_Limits__MaxMediaMb", target.Id, d.Rule);
-            var path = await _store.StoreAsync(file.LocalPath, target.Id, m.Id, media.FileName, token).ConfigureAwait(false);
+            var stored = await _store.StoreAsync(file.LocalPath, target.Id, m.Id, media.FileName, token).ConfigureAwait(false);
             var payload = new
             {
                 note = ToolResult.ThirdPartyNote,
-                chat = target.Id, message_id = m.Id, path, size = file.Size, kind = media.Kind,
+                chat = target.Id, message_id = m.Id, path = stored.Path, host_path = stored.HostPath, size = file.Size, kind = media.Kind,
                 file_name = media.FileName, mime_type = media.MimeType,
             };
             return ToolOutcome.Ok(payload, target.Id, 1, d);

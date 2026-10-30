@@ -124,6 +124,21 @@ Runtime keys that aren't policy and are never logged or hashed:
 | `DatabaseKey` or `DatabaseKeyFile` | TDLib database encryption key, inline or as a path to a file |
 | `DataDir` | Data root, default `/data` (`tdlib/`, `files/`, `media/`, `audit.jsonl`) |
 | `AuditPath` | Audit file, default `{DataDir}/audit.jsonl` |
+| `MediaDir` | Where `download_media` stores files, default `{DataDir}/media`. Can be a bind mount. |
+| `MediaHostDir` | Optional: the host path of `MediaDir`. If set, `download_media` also returns `host_path`. This is pure string mapping, and nothing on the host is accessed. |
+
+### Media on the host
+
+By default, downloaded files stay inside the `/data` volume. To hand them to tools on the host, bind-mount a host folder and tell TgMcp both paths:
+
+```sh
+sudo install -d -o 1654 -g 1654 -m 0750 /var/lib/tgmcp/media   # owned by the image's `app` user (uid/gid 1654)
+docker run -i --rm ... \
+  -v /var/lib/tgmcp/media:/media -e TGMCP_MediaDir=/media -e TGMCP_MediaHostDir=/var/lib/tgmcp/media \
+  -v tgmcp-data:/data tgmcp:<sha>
+```
+
+`download_media` then returns `"path": "/media/<chat>_<message>_<name>"` and `"host_path": "/var/lib/tgmcp/media/<chat>_<message>_<name>"`. The container runs as uid **1654** (`app`), so the host folder must be writable by that uid.
 
 Chat kinds: `private` covers people, secret chats and Saved Messages. `group` covers basic groups and supergroups that aren't channels. `channel` covers broadcast channels. `bot` is a private chat with a bot.
 

@@ -4,7 +4,7 @@ using TgMcp.Application.Telegram;
 namespace TgMcp.Infrastructure.Telegram;
 
 /// <summary>
-/// Copies downloaded files to <c>{DataDir}/media/{chat}_{message}_{name}</c>.
+/// Copies downloaded files to <c>{MediaDir}/{chat}_{message}_{name}</c> (default MediaDir: {DataDir}/media).
 /// TODO: delete files older than 7 days (planned for a later version).
 /// </summary>
 public sealed class FileMediaStore : IMediaStore
@@ -19,11 +19,12 @@ public sealed class FileMediaStore : IMediaStore
     }
 
     /// <inheritdoc />
-    public async Task<string> StoreAsync(string sourcePath, long chatId, long messageId, string? fileName, CancellationToken ct)
+    public async Task<StoredMedia> StoreAsync(string sourcePath, long chatId, long messageId, string? fileName, CancellationToken ct)
     {
-        Directory.CreateDirectory(_o.MediaDir);
+        var mediaDir = _o.EffectiveMediaDir;
+        Directory.CreateDirectory(mediaDir);
         var safe = Sanitize(fileName ?? Path.GetFileName(sourcePath));
-        var target = Path.Combine(_o.MediaDir, $"{chatId}_{messageId}_{safe}");
+        var target = Path.Combine(mediaDir, $"{chatId}_{messageId}_{safe}");
         var src = File.OpenRead(sourcePath);
         await using (src.ConfigureAwait(false))
         {
@@ -33,7 +34,7 @@ public sealed class FileMediaStore : IMediaStore
                 await src.CopyToAsync(dst, ct).ConfigureAwait(false);
             }
         }
-        return target;
+        return new StoredMedia(target, MediaPaths.ToHostPath(target, mediaDir, _o.MediaHostDir));
     }
 
     private static string Sanitize(string name)

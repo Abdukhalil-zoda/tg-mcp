@@ -110,9 +110,32 @@ public interface ITelegramClient
     Task<IReadOnlyDictionary<string, IReadOnlySet<long>>> GetFolderChatsAsync(CancellationToken ct);
 }
 
+/// <summary>Where a downloaded file was stored.</summary>
+/// <param name="Path">Path inside the server (container).</param>
+/// <param name="HostPath">The same file on the host, if TGMCP_MediaHostDir is configured.</param>
+public sealed record StoredMedia(string Path, string? HostPath);
+
 /// <summary>Stores downloaded media in the media directory.</summary>
 public interface IMediaStore
 {
-    /// <summary>Copies a downloaded file into the media store and returns the stored path.</summary>
-    Task<string> StoreAsync(string sourcePath, long chatId, long messageId, string? fileName, CancellationToken ct);
+    /// <summary>Copies a downloaded file into the media store.</summary>
+    Task<StoredMedia> StoreAsync(string sourcePath, long chatId, long messageId, string? fileName, CancellationToken ct);
+}
+
+/// <summary>Maps media paths between the container and the host (pure string mapping).</summary>
+public static class MediaPaths
+{
+    /// <summary>
+    /// The host path for <paramref name="containerPath"/> under <paramref name="mediaDir"/>, or null when no host
+    /// directory is configured or the path is not inside the media directory.
+    /// </summary>
+    public static string? ToHostPath(string containerPath, string mediaDir, string? hostDir)
+    {
+        ArgumentNullException.ThrowIfNull(containerPath);
+        ArgumentNullException.ThrowIfNull(mediaDir);
+        if (string.IsNullOrWhiteSpace(hostDir)) return null;
+        var rel = Path.GetRelativePath(mediaDir, containerPath);
+        if (rel == "." || rel.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(rel)) return null;
+        return hostDir.TrimEnd('/') + "/" + rel.Replace('\\', '/');
+    }
 }

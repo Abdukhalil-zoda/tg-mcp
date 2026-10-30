@@ -11,6 +11,10 @@ and the project uses [Semantic Versioning](https://semver.org/).
 - Permission denials name the chat and include a one-line config hint for the operator; Deny-rule
   hits return only "denied by policy".
 
+### Added
+- `TGMCP_MediaDir` (default `/data/media`) to bind-mount a host folder for downloads, and
+  `TGMCP_MediaHostDir` to report the matching host path in `download_media` results.
+
 ## [0.1.0] - 2026-10-30
 
 ### Added

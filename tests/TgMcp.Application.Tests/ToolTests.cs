@@ -403,8 +403,18 @@ public class ToolTests
         var h = H(("Chats__0__Id", "-100222"), ("Chats__0__Read", "true"), ("Chats__0__Features", "media_download"));
         var root = Json(await h.Download.RunAsync("-100222", 14, Ct));
         Assert.Equal("/data/media/-100222_14_a.pdf", root.GetProperty("path").GetString());
+        Assert.False(root.TryGetProperty("host_path", out _));
         Assert.Equal(ToolResult.ThirdPartyNote, root.GetProperty("note").GetString());
         Assert.Equal([78], h.Telegram.Downloads);
+    }
+
+    [Fact]
+    public async Task Download_media_reports_host_path_when_configured()
+    {
+        var h = H(("Chats__0__Id", "-100222"), ("Chats__0__Read", "true"), ("Chats__0__Features", "media_download"));
+        h.Media.HostDir = "/var/lib/tgmcp/media";
+        var root = Json(await h.Download.RunAsync("-100222", 14, Ct));
+        Assert.Equal("/var/lib/tgmcp/media/-100222_14_a.pdf", root.GetProperty("host_path").GetString());
     }
 
     [Fact]

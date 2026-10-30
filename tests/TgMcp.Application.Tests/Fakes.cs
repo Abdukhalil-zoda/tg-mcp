@@ -123,8 +123,13 @@ internal sealed class MemoryAudit : IAuditSink
 
 internal sealed class MemoryMediaStore : IMediaStore
 {
-    public Task<string> StoreAsync(string sourcePath, long chatId, long messageId, string? fileName, CancellationToken ct) =>
-        Task.FromResult($"/data/media/{chatId}_{messageId}_{fileName ?? "file"}");
+    public string? HostDir { get; set; }
+
+    public Task<StoredMedia> StoreAsync(string sourcePath, long chatId, long messageId, string? fileName, CancellationToken ct)
+    {
+        var path = $"/data/media/{chatId}_{messageId}_{fileName ?? "file"}";
+        return Task.FromResult(new StoredMedia(path, MediaPaths.ToHostPath(path, "/data/media", HostDir)));
+    }
 }
 
 /// <summary>Wires the real use cases to fakes.</summary>
@@ -153,7 +158,8 @@ internal sealed class Harness
     public GetMessageTool Get => new(Context);
     public SearchChatTool SearchChat => new(Context);
     public SearchAllTool SearchAll => new(Context);
-    public DownloadMediaTool Download => new(Context, new MemoryMediaStore());
+    public MemoryMediaStore Media { get; } = new();
+    public DownloadMediaTool Download => new(Context, Media);
 
     public AuditEntry LastAudit => Audit.Entries[^1];
 

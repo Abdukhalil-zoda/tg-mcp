@@ -43,7 +43,8 @@ public static class Composition
             .Validate(o => Path.IsPathRooted(o.DataDir) && Path.IsPathRooted(o.EffectiveAuditPath), "TGMCP_DataDir and TGMCP_AuditPath must be absolute paths")
             .ValidateOnStart();
         builder.Services.AddOptions<TelegramOptions>().Bind(builder.Configuration)
-            .Validate(o => Path.IsPathRooted(o.DataDir), "TGMCP_DataDir must be an absolute path")
+            .Validate(o => Path.IsPathRooted(o.DataDir) && Path.IsPathRooted(o.EffectiveMediaDir), "TGMCP_DataDir and TGMCP_MediaDir must be absolute paths")
+            .Validate(o => string.IsNullOrWhiteSpace(o.MediaHostDir) || o.MediaHostDir.StartsWith('/'), "TGMCP_MediaHostDir must be an absolute path")
             .ValidateOnStart();
 
         var config = PolicyConfig.Parse(builder.Configuration.AsEnumerable());
