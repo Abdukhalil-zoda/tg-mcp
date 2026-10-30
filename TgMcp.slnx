@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TgMcp.Domain/TgMcp.Domain.csproj" />
+    <Project Path="src/TgMcp.Application/TgMcp.Application.csproj" />
+    <Project Path="src/TgMcp.Infrastructure.Telegram/TgMcp.Infrastructure.Telegram.csproj" />
+    <Project Path="src/TgMcp.Server/TgMcp.Server.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TgMcp.Domain.Tests/TgMcp.Domain.Tests.csproj" />
+    <Project Path="tests/TgMcp.Application.Tests/TgMcp.Application.Tests.csproj" />
+  </Folder>
+</Solution>

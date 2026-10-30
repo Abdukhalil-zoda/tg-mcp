@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Pure access-policy model and engine for TgMcp (no Telegram dependencies).</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="TgMcp.Domain.Tests" />
+  </ItemGroup>
+</Project>
