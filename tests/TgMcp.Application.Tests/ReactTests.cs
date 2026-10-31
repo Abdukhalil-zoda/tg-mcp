@@ -20,7 +20,10 @@ public class ReactTests
     private static (string, string)[] Rule(string write, string features = "react") =>
         [("Chats__0__Id", "111"), ("Chats__0__Read", "true"), ("Chats__0__Features", features), ("Chats__0__Write", write)];
 
-    private static Harness H(params (string, string)[] extra)
+    /// <summary>Most tests use react.mode "on" so the chat's write mode decides; the mode tests use Raw.</summary>
+    private static Harness H(params (string, string)[] extra) => Raw([("React__Mode", "on"), .. extra]);
+
+    private static Harness Raw(params (string, string)[] extra)
     {
         var h = new Harness([.. Global, .. extra]);
         Assert.True(h.Policy.Config.IsValid, string.Join("; ", h.Policy.Config.Errors));
@@ -148,6 +151,50 @@ public class ReactTests
         var old = H([.. Rule("on"), ("Chats__0__SinceDays", "7")]);
         Assert.Contains("older than", (await old.React.RunAsync("111", 1, "👍", Ct)).Text, StringComparison.Ordinal);
         Assert.Empty(old.Telegram.Reactions);
+    }
+
+    [Theory]
+    // chat write, react.mode -> effective
+    [InlineData("on", null, "draft")]       // default react.mode is draft
+    [InlineData("on", "draft", "draft")]
+    [InlineData("on", "on", "added")]
+    [InlineData("draft", "on", "draft")]
+    [InlineData("draft", "draft", "draft")]
+    public async Task Effective_mode_is_the_stricter_of_write_and_react_mode(string write, string? reactMode, string expected)
+    {
+        var h = reactMode is null ? Raw(Rule(write)) : Raw([.. Rule(write), ("React__Mode", reactMode)]);
+        var root = Json(await h.React.RunAsync("111", 5, "👍", Ct));
+        Assert.Equal(expected, root.GetProperty("status").GetString());
+        Assert.Equal(expected == "added" ? 1 : 0, h.Telegram.Reactions.Count);
+    }
+
+    [Fact]
+    public async Task Write_off_beats_react_mode_on()
+    {
+        var h = Raw([.. Rule("off"), ("React__Mode", "on")]);
+        Assert.Contains("\"write\": \"off\"", (await h.React.RunAsync("111", 5, "👍", Ct)).Text, StringComparison.Ordinal);
+        Assert.Empty(h.Telegram.Reactions);
+        Assert.Empty(h.DraftStore.Drafts);
+    }
+
+    [Fact]
+    public async Task Reactions_stay_drafts_while_messages_in_the_same_chat_are_sent()
+    {
+        var h = Raw(Rule("on"));
+        Assert.Equal("draft", Json(await h.React.RunAsync("111", 5, "👍", Ct)).GetProperty("status").GetString());
+        Assert.Equal("sent", Json(await h.Send.RunAsync("111", "hi", 0, 0, false, Ct)).GetProperty("status").GetString());
+    }
+
+    [Theory]
+    [InlineData("off", false)]
+    [InlineData("maybe", false)]
+    [InlineData("draft", true)]
+    [InlineData("on", true)]
+    public void React_mode_validation(string value, bool valid)
+    {
+        Assert.Equal(WriteMode.Draft, PolicyConfig.FromPairs().ReactMode);
+        Assert.Equal(valid, PolicyConfig.FromPairs(("React__Mode", value)).IsValid);
+        Assert.False(PolicyConfig.FromPairs(("React__Bogus", "on")).IsValid);
     }
 
     [Fact]

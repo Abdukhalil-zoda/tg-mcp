@@ -33,7 +33,7 @@ First public release: a policy-gated MCP server (stdio) for a Telegram **user** 
   `summarize_message` / `translate_message` (Telegram's AI features, usually Premium), `preview_chat`.
 - Write, as the owner, with a `"draft"` mode for owner approval (except `mark_read`, which acts at once):
   `send_message` (also to allow-listed phone numbers via `contacts.mode`), `react` (offered non-Premium
-  emoji only), `forward_message` (source needs read + forward, destination a write mode),
+  emoji only; effective mode = stricter of the chat's `write` and `react.mode`, default `"draft"`), `forward_message` (source needs read + forward, destination a write mode),
   `edit_message` / `delete_message` (only messages TgMcp sent, tracked in a sent-log; deletions are drafts
   unless `delete.mode` is `"on"`), `join_chat` (`join.mode` off/draft/on with an allow list),
   `mark_read`.

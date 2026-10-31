@@ -231,6 +231,9 @@ public static class Names
         return char.ToLowerInvariant(n[0]) + n[1..];
     }
 
+    /// <summary>The stricter of two modes: off beats draft, draft beats on.</summary>
+    public static WriteMode Stricter(WriteMode a, WriteMode b) => (WriteMode)Math.Min((int)a, (int)b);
+
     /// <summary>Env name of a write mode.</summary>
     public static string Snake(WriteMode m) => m switch
     {

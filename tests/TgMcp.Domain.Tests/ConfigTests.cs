@@ -233,6 +233,14 @@ public class ConfigTests
     }
 
     [Fact]
+    public void React_mode_is_shown_in_the_report()
+    {
+        var report = string.Join("\n", ConfigReport.Describe(PolicyConfig.FromPairs(("React__Mode", "on"))));
+        Assert.Contains("react.mode = on (stricter of this and the chat's write mode) [env]", report, StringComparison.Ordinal);
+        Assert.Contains("react.mode = draft", string.Join("\n", ConfigReport.Describe(PolicyConfig.FromPairs())), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Contacts_defaults()
     {
         var c = PolicyConfig.FromPairs();

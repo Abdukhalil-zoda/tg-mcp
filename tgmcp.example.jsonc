@@ -59,8 +59,8 @@
     "send": false,          // send_message: writing AS YOU, as drafts or directly (see "write" per chat)
     "join": false,          // join_chat / preview_chat: joining groups/channels AS YOU (see "join" below)
     "markRead": false,      // mark_read: marks chats read AS YOU (clears unread counters, senders see read receipts)
-    "react": false,         // react: emoji reactions AS YOU; also needs "send": true and a chat "write" mode
-                            // ("draft" = you approve each reaction with `tgmcp approve <id>`)
+    "react": false,         // react: emoji reactions AS YOU; also needs "send": true and a chat "write" mode;
+                            // the stricter of that and "react.mode" (below) applies
     "forward": false,       // forward_message: source chat needs "read" + "forward", destination a "write" mode
     "editOwn": false,       // edit_message: only messages TgMcp itself sent (sent-log); chat needs "edit_own" + a "write" mode
     "deleteOwn": false,     // delete_message: only messages TgMcp itself sent; drafts unless "delete.mode" is "on" (see below)
@@ -134,6 +134,15 @@
     "joinsPerHour": 5,           // join_chat calls (joined or drafted) per hour, >= 1
     "newChatsPerDay": 3,         // messages to new people by phone (sent or drafted) per 24 hours, >= 1
     "mediaRetentionDays": 7,     // delete downloaded media older than N days; 0 = keep forever
+  },
+
+  // Reactions (needs "features.react": true and "react" in the chat rule). The effective mode is the
+  // STRICTER of the chat's "write" and this mode (off beats draft, draft beats on), so reactions can stay
+  // drafts in chats where messages are sent directly.
+  //   "draft" (default) every reaction waits for `tgmcp approve <id>`
+  //   "on"    reactions are applied at once in chats with "write": "on"
+  "react": {
+    "mode": "draft",
   },
 
   // Deleting own messages (needs "features.deleteOwn": true and "delete_own" in the chat rule).

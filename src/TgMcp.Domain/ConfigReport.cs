@@ -57,6 +57,7 @@ public static class ConfigReport
         yield return ("limits:maxMediaMb", "limits.maxMediaMb", c.MaxMediaMb.ToString(CultureInfo.InvariantCulture));
         yield return ("limits:mediaRetentionDays", "limits.mediaRetentionDays", c.MediaRetentionDays == 0 ? "0 (keep forever)" : c.MediaRetentionDays.ToString(CultureInfo.InvariantCulture));
         yield return ("delete:mode", "delete.mode", Names.Snake(c.DeleteMode));
+        yield return ("react:mode", "react.mode", Names.Snake(c.ReactMode) + " (stricter of this and the chat's write mode)");
         yield return ("contacts:mode", "contacts.mode", Names.Snake(c.ContactsMode));
         yield return ("ContactsAllow", "TGMCP_ContactsAllow", c.ContactsAllow.Count == 0 ? "(none)"
             : $"{c.ContactsAllow.Count} number(s): " + string.Join(", ", c.ContactsAllow.Select(PhoneNumber.Redact)));

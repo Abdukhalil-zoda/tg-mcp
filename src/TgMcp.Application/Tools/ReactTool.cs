@@ -6,8 +6,8 @@ namespace TgMcp.Application.Tools;
 
 /// <summary>
 /// react: adds an emoji reaction as the owner, or removes the owner's reactions (emoji null). Needs read,
-/// the react feature and a write mode: "on" reacts at once, "draft" saves a reaction draft for <c>tgmcp approve</c>,
-/// "off" is denied. Only emoji reactions offered for the message (getMessageAvailableReactions) and usable
+/// the react feature and a write mode. The effective mode is the stricter of the chat's write mode and react.mode
+/// (default "draft"): "on" reacts at once, "draft" saves a reaction draft for <c>tgmcp approve</c>, "off" is denied. Only emoji reactions offered for the message (getMessageAvailableReactions) and usable
 /// without Premium are accepted; paid and custom-emoji reactions are not supported.
 /// </summary>
 public sealed class ReactTool
@@ -37,7 +37,8 @@ public sealed class ReactTool
             if (!_limiter.TryAcquire(target.Id))
                 return ToolOutcome.Refused($"send limit for this chat reached (limits.sendsPerMinute={_c.Policy.Config.SendsPerMinute})", target.Id, "limits");
 
-            if (d.Write == WriteMode.Draft)
+            var mode = Names.Stricter(d.Write, _c.Policy.Config.ReactMode);
+            if (mode == WriteMode.Draft)
             {
                 var draft = await _drafts.SaveReactionAsync(target.Title, new PendingReaction(target.Id, messageId, wanted), token).ConfigureAwait(false);
                 var payload = new

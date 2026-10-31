@@ -174,6 +174,12 @@ public sealed class PolicyConfig
     /// <summary>delete.mode: "draft" (default; every delete needs <c>tgmcp approve</c>) or "on" (delete at once in chats with "write": "on").</summary>
     public WriteMode DeleteMode { get; private set; } = WriteMode.Draft;
 
+    /// <summary>
+    /// react.mode: "draft" (default; reactions wait for <c>tgmcp approve</c>) or "on". The effective mode is the stricter
+    /// of this and the chat's write mode, so reactions can stay drafts in chats where messages are "on".
+    /// </summary>
+    public WriteMode ReactMode { get; private set; } = WriteMode.Draft;
+
     /// <summary>join.allow: targets that may be joined in mode "on" ("*" = any).</summary>
     public IReadOnlyList<JoinAllowEntry> JoinAllow { get; private set; } = [];
 
@@ -440,6 +446,18 @@ public sealed class PolicyConfig
                         Unknown(key);
                     }
                     break;
+                case "react" when p.Length == 2:
+                    if (p[1].Equals("mode", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var mode = Write(key, value);
+                        if (mode == WriteMode.Off) _errors.Add($"{key}: must be \"draft\" or \"on\" (turn reactions off with features.react)");
+                        else ReactMode = mode ?? WriteMode.Draft;
+                    }
+                    else
+                    {
+                        Unknown(key);
+                    }
+                    break;
                 case "media" when p.Length == 2:
                     switch (p[1].ToLowerInvariant())
                     {
@@ -679,6 +697,7 @@ public sealed class PolicyConfig
         foreach (var d in Denies) sb.Append($"{d.Label}\n");
         sb.Append($"limits list_chats={Names.Snake(ListChats)} max_messages_per_call={MaxMessagesPerCall} rate_per_minute={RatePerMinute} max_media_mb={MaxMediaMb} media_retention_days={MediaRetentionDays} sends_per_minute={SendsPerMinute} joins_per_hour={JoinsPerHour}\n");
         sb.Append($"delete mode={Names.Snake(DeleteMode)}\n");
+        sb.Append($"react mode={Names.Snake(ReactMode)}\n");
         sb.Append($"contacts mode={Names.Snake(ContactsMode)} allow={string.Join(",", ContactsAllow.Select(PhoneNumber.Redact).Order(StringComparer.Ordinal))} new_chats_per_day={NewChatsPerDay}\n");
         sb.Append($"join mode={Names.Snake(JoinMode)} allow={string.Join(",", JoinAllow.Select(a => a.ToString()).Order(StringComparer.Ordinal))}\n");
         return sb.ToString();
