@@ -4,7 +4,9 @@
     <AssemblyName>tgmcp</AssemblyName>
     <RootNamespace>TgMcp.Server</RootNamespace>
     <Description>TgMcp composition root: MCP stdio server and owner CLI (serve, login, config check).</Description>
-    <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
+    <!-- linux-x64 by default; the Dockerfile publishes linux-arm64 for arm64 images. -->
+    <RuntimeIdentifiers>linux-x64;linux-arm64</RuntimeIdentifiers>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">linux-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>

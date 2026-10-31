@@ -159,6 +159,19 @@ A message in some chat may try to make the assistant join a spam or phishing gro
 
 Requirements: Docker. To build without Docker, you need the .NET 11 SDK (see `global.json`).
 
+**Prebuilt images.** Each release tag `vX.Y.Z` publishes a signed multi-arch image (linux/amd64, linux/arm64) with an SBOM and a provenance attestation:
+
+```sh
+docker pull ghcr.io/abdukhalil-zoda/tg-mcp:0.1.0
+# pin the digest you verified, e.g. ghcr.io/abdukhalil-zoda/tg-mcp@sha256:<digest>
+cosign verify ghcr.io/abdukhalil-zoda/tg-mcp@sha256:<digest> \
+  --certificate-identity-regexp '^https://github.com/Abdukhalil-zoda/tg-mcp/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+gh attestation verify oci://ghcr.io/abdukhalil-zoda/tg-mcp@sha256:<digest> -R Abdukhalil-zoda/tg-mcp
+```
+
+Use `ghcr.io/abdukhalil-zoda/tg-mcp@sha256:<digest>` wherever this README says `tgmcp:<sha>`. To build it yourself instead:
+
 ```sh
 docker build -t tgmcp:dev .
 ```
@@ -299,7 +312,7 @@ tests/TgMcp.Application.Tests     tool gating against a fake Telegram client, re
 tests/TgMcp.Infrastructure.Tests  JSON config loading, config check, audit sink, media store (file system)
 ```
 
-Image: `mcr.microsoft.com/dotnet/runtime:11.0.0-rc.3`, framework-dependent publish for linux-x64. The runtime image already ships the libraries `libtdjson.so` needs (libssl3, zlib, libstdc++), as checked with `ldd`. Self-contained or trimmed builds aren't used, because TDLib's JSON layer relies on reflection.
+Image: `mcr.microsoft.com/dotnet/runtime:11.0.0-rc.3`, framework-dependent publish for linux-x64 or linux-arm64 (the build stage cross-publishes, using `tdlib.native.linux-arm64` for arm64). Releases are built by `.github/workflows/release.yml` on `v*` tags and pushed to GHCR, with cosign keyless signing, an SBOM and a provenance attestation. The runtime image already ships the libraries `libtdjson.so` needs (libssl3, zlib, libstdc++), as checked with `ldd`. Self-contained or trimmed builds aren't used, because TDLib's JSON layer relies on reflection.
 
 ## Limitations
 
@@ -307,7 +320,7 @@ Image: `mcr.microsoft.com/dotnet/runtime:11.0.0-rc.3`, framework-dependent publi
 - The policy is read once at start. Reconnect the MCP server after editing it.
 - `summarize` and `translate` are reserved. They will probably need Telegram Premium server-side features.
 - Login supports phone, code and 2FA password only. Email-code login, registering a new account and QR login aren't supported. Log in with an official app first if Telegram asks for these.
-- TDLib native binaries are linux-x64 only (`tdlib.native.linux-x64`).
+- Images exist for linux/amd64 and linux/arm64. The arm64 image is cross-built and has only passed the release smoke test on amd64 so far.
 
 ## License
 

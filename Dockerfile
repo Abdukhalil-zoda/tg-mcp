@@ -6,7 +6,9 @@
 ARG SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:11.0.100-rc.3
 ARG RUNTIME_IMAGE=mcr.microsoft.com/dotnet/runtime:11.0.0-rc.3
 
-FROM ${SDK_IMAGE} AS build
+# The build always runs natively on the build machine; arm64 output is cross-published (managed code + the
+# arm64 TDLib native package), so no emulation is needed except for the small runtime stage.
+FROM --platform=$BUILDPLATFORM ${SDK_IMAGE} AS build
 WORKDIR /src
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
 # Restore first for layer caching.
@@ -27,7 +29,9 @@ FROM build AS test
 RUN dotnet test --solution TgMcp.slnx --no-restore
 
 FROM build AS publish
-RUN dotnet publish src/TgMcp.Server/TgMcp.Server.csproj -c Release --no-restore -o /app \
+ARG TARGETARCH=amd64
+RUN RID=$([ "$TARGETARCH" = "arm64" ] && echo linux-arm64 || echo linux-x64) \
+    && dotnet publish src/TgMcp.Server/TgMcp.Server.csproj -c Release --no-restore -r "$RID" -o /app \
     && rm -f /app/*.pdb /app/*.xml
 
 FROM ${RUNTIME_IMAGE} AS runtime

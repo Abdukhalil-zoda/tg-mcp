@@ -8,5 +8,6 @@
   <ItemGroup>
     <PackageReference Include="TDLib" />
     <PackageReference Include="tdlib.native.linux-x64" />
+    <PackageReference Include="tdlib.native.linux-arm64" />
   </ItemGroup>
 </Project>

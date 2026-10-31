@@ -6,6 +6,9 @@ and the project uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Release workflow: on `v*` tags, a multi-arch image (linux/amd64, linux/arm64) is pushed to
+  `ghcr.io/abdukhalil-zoda/tg-mcp` with an SBOM, a provenance attestation and a keyless cosign signature.
+  The Dockerfile cross-publishes for the target architecture (`tdlib.native.linux-arm64` added).
 - `edit_message` and `delete_message`: edit or delete messages that TgMcp itself sent (tracked in
   `/data/sent-log.json`, ids only). Need `features.editOwn` / `features.deleteOwn` + `features.send` and
   `"edit_own"` / `"delete_own"` + a `write` mode in the chat rule. Edits follow the write mode; deletions
