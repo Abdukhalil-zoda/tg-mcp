@@ -57,6 +57,10 @@ public static class ConfigReport
         yield return ("limits:maxMediaMb", "limits.maxMediaMb", c.MaxMediaMb.ToString(CultureInfo.InvariantCulture));
         yield return ("limits:mediaRetentionDays", "limits.mediaRetentionDays", c.MediaRetentionDays == 0 ? "0 (keep forever)" : c.MediaRetentionDays.ToString(CultureInfo.InvariantCulture));
         yield return ("delete:mode", "delete.mode", Names.Snake(c.DeleteMode));
+        yield return ("contacts:mode", "contacts.mode", Names.Snake(c.ContactsMode));
+        yield return ("ContactsAllow", "TGMCP_ContactsAllow", c.ContactsAllow.Count == 0 ? "(none)"
+            : $"{c.ContactsAllow.Count} number(s): " + string.Join(", ", c.ContactsAllow.Select(PhoneNumber.Redact)));
+        yield return ("limits:newChatsPerDay", "limits.newChatsPerDay", c.NewChatsPerDay.ToString(CultureInfo.InvariantCulture));
         yield return ("join:mode", "join.mode", Names.Snake(c.JoinMode));
         yield return ("join:allow", "join.allow", c.JoinAllow.Count == 0 ? "[]" : "[" + string.Join(", ", c.JoinAllow) + "]"
             + (c.JoinAllow.Any(a => a.Any) ? " (WARNING: \"*\" allows joining anything)" : ""));

@@ -13,20 +13,34 @@ public sealed class SendMessageTool
     private readonly ToolContext _c;
     private readonly IDraftStore _drafts;
     private readonly ISendLimiter _sends;
+    private readonly INewChatLimiter _newChats;
 
     /// <summary>Creates the tool.</summary>
-    public SendMessageTool(ToolContext context, IDraftStore drafts, ISendLimiter sends)
+    public SendMessageTool(ToolContext context, IDraftStore drafts, ISendLimiter sends, INewChatLimiter newChats)
     {
         _c = context;
         _drafts = drafts;
         _sends = sends;
+        _newChats = newChats;
     }
 
-    /// <summary>Runs the tool.</summary>
+    /// <summary>Runs the tool for a chat (id or @username).</summary>
     public Task<ToolResult> RunAsync(string chat, string text, long replyToMessageId, int topicId, bool disableNotification, CancellationToken ct) =>
+        RunAsync(chat, text, replyToMessageId, topicId, disableNotification, null, null, ct);
+
+    /// <summary>Runs the tool; with <paramref name="phone"/> instead of a chat, the message goes to a person by phone number.</summary>
+    public Task<ToolResult> RunAsync(string? chat, string text, long replyToMessageId, int topicId, bool disableNotification,
+        string? phone, string? contactName, CancellationToken ct) =>
         _c.Runner.RunAsync("send_message", [Need.Write], async token =>
         {
             ValidateText(text);
+            if (!string.IsNullOrWhiteSpace(phone))
+            {
+                if (!string.IsNullOrWhiteSpace(chat)) throw new ArgumentException("pass either chat or phone, not both", nameof(phone));
+                if (replyToMessageId != 0 || topicId != 0) throw new ArgumentException("reply_to_message_id and topic_id can't be used with phone", nameof(phone));
+                return await PhoneMessages.SendAsync(_c, _drafts, _newChats, phone, contactName, text, disableNotification, token).ConfigureAwait(false);
+            }
+            if (string.IsNullOrWhiteSpace(chat)) throw new ArgumentException("chat is required (or phone, if the owner allows it)", nameof(chat));
             if (replyToMessageId < 0) throw new ArgumentException("reply_to_message_id must not be negative", nameof(replyToMessageId));
             if (topicId < 0) throw new ArgumentException("topic_id must not be negative", nameof(topicId));
             var target = await _c.Chats.ResolveAsync(chat, token).ConfigureAwait(false);

@@ -29,6 +29,13 @@ public static class DraftCommandsCli
                             output.WriteLine($"{d.Id}  {d.CreatedUtc.UtcDateTime:yyyy-MM-dd HH:mm}Z  JOIN {what} \"{d.ChatTitle}\" ({j.Type}, {j.MemberCount} members)");
                             continue;
                         }
+                        if (d.Kind == Draft.PhoneKind && d.Phone is { } ph)
+                        {
+                            var body = ph.Text.ReplaceLineEndings(" ");
+                            if (body.Length > 80) body = body[..80] + "...";
+                            output.WriteLine($"{d.Id}  {d.CreatedUtc.UtcDateTime:yyyy-MM-dd HH:mm}Z  NEW CONTACT {ph.Phone} \"{ph.ContactName}\"  {body}");
+                            continue;
+                        }
                         if (d.Kind == Draft.EditKind && d.Edit is { } ed)
                         {
                             var text = ed.Text.ReplaceLineEndings(" ");

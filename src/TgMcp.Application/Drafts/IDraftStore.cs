@@ -17,10 +17,14 @@ namespace TgMcp.Application.Drafts;
 /// <param name="Forward">The forward to perform (kind "forward").</param>
 /// <param name="Edit">The edit to perform (kind "edit").</param>
 /// <param name="Delete">The deletion to perform (kind "delete").</param>
+/// <param name="Phone">The message to a phone number (kind "phone_message").</param>
 public sealed record Draft(string Id, DateTimeOffset CreatedUtc, string ChatTitle, OutgoingMessage? Message,
     string Kind = Draft.MessageKind, PendingJoin? Join = null, PendingReaction? Reaction = null, PendingForward? Forward = null,
-    PendingEdit? Edit = null, PendingDelete? Delete = null)
+    PendingEdit? Edit = null, PendingDelete? Delete = null, PendingPhoneMessage? Phone = null)
 {
+    /// <summary>Kind of a message to a phone number.</summary>
+    public const string PhoneKind = "phone_message";
+
     /// <summary>Kind of an edit draft.</summary>
     public const string EditKind = "edit";
 
@@ -39,6 +43,13 @@ public sealed record Draft(string Id, DateTimeOffset CreatedUtc, string ChatTitl
     /// <summary>Kind of a join draft.</summary>
     public const string JoinKind = "join";
 }
+
+/// <summary>A first message to a phone number, waiting for the owner's approval (the number is stored owner-only, never audited).</summary>
+/// <param name="Phone">E.164 number.</param>
+/// <param name="ContactName">Name for the imported contact.</param>
+/// <param name="Text">Plain text.</param>
+/// <param name="DisableNotification">Send silently.</param>
+public sealed record PendingPhoneMessage(string Phone, string ContactName, string Text, bool DisableNotification);
 
 /// <summary>An edit waiting for the owner's approval.</summary>
 /// <param name="ChatId">Chat id.</param>
@@ -86,6 +97,9 @@ public interface IDraftStore
 
     /// <summary>Saves a new join draft.</summary>
     Task<Draft> SaveJoinAsync(string chatTitle, PendingJoin join, CancellationToken ct);
+
+    /// <summary>Saves a new phone-message draft.</summary>
+    Task<Draft> SavePhoneAsync(PendingPhoneMessage message, CancellationToken ct);
 
     /// <summary>Saves a new edit draft.</summary>
     Task<Draft> SaveEditAsync(string chatTitle, PendingEdit edit, CancellationToken ct);

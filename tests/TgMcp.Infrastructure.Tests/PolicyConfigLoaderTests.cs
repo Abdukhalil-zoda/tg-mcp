@@ -262,6 +262,22 @@ public sealed class PolicyConfigLoaderTests : IDisposable
     }
 
     [Fact]
+    public void Config_check_redacts_the_contacts_allow_list_and_refuses_it_in_the_file()
+    {
+        using var output = new StringWriter();
+        var code = ConfigCheckCommand.Run(Env(("TGMCP_ContactsAllow", "+15551234567")), WriteFile("""{ "contacts": { "mode": "draft" } }"""), output);
+        Assert.Equal(0, code);
+        var text = output.ToString();
+        Assert.Contains("TGMCP_ContactsAllow = 1 number(s): +…67 (#", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("5551234567", text, StringComparison.Ordinal);
+
+        using var bad = new StringWriter();
+        Assert.Equal(1, ConfigCheckCommand.Run(Env(), WriteFile("""{ "contactsAllow": "+15551234567" }""", "bad.json"), bad));
+        Assert.Contains("contactsAllow: only allowed as the environment variable TGMCP_ContactsAllow", bad.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("5551234567", bad.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Config_check_fails_for_an_invalid_file()
     {
         using var output = new StringWriter();

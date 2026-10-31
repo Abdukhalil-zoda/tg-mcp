@@ -42,6 +42,12 @@ public interface IPolicy
     /// on the resolved chat with <see cref="Effective"/>.
     /// </summary>
     JoinDecision CheckJoin(JoinTarget target);
+
+    /// <summary>
+    /// Whether a message may go to a new person by phone: master switch and features.send, then contacts.mode
+    /// (off: denied; draft / on: allowed) and the environment-only TGMCP_ContactsAllow list, which is required in every mode.
+    /// </summary>
+    JoinDecision CheckPhone(string e164);
 }
 
 /// <summary>Outcome of a join check.</summary>
@@ -186,6 +192,19 @@ public sealed class PolicyEngine : IPolicy
             _ when Config.JoinAllow.Any(a => a.Matches(target)) => new JoinDecision(true, WriteMode.On, "allowed by join.allow"),
             _ => new JoinDecision(false, WriteMode.On, "target is not in join.allow"),
         };
+    }
+
+    /// <inheritdoc />
+    public JoinDecision CheckPhone(string e164)
+    {
+        ArgumentNullException.ThrowIfNull(e164);
+        var g = CheckGlobal(Need.Write);
+        if (!g.Allowed) return new JoinDecision(false, Config.ContactsMode, g.Reason, g);
+        if (Config.ContactsMode == WriteMode.Off) return new JoinDecision(false, WriteMode.Off, "contacts.mode is off");
+        if (Config.ContactsAllow.Count == 0) return new JoinDecision(false, Config.ContactsMode, "TGMCP_ContactsAllow is empty");
+        return Config.ContactsAllow.Contains(e164)
+            ? new JoinDecision(true, Config.ContactsMode, "allowed by TGMCP_ContactsAllow")
+            : new JoinDecision(false, Config.ContactsMode, "number is not in TGMCP_ContactsAllow");
     }
 
     private string ConfigProblem() =>

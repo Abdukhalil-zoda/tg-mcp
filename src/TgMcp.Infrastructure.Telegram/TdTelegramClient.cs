@@ -287,6 +287,33 @@ public sealed class TdTelegramClient : ITelegramClient, IInboundMessageSource, I
             .ConfigureAwait(false)).Text ?? "";
 
     /// <inheritdoc />
+    public async Task<TgPhoneChat?> ResolvePhoneAsync(string e164, string contactName, CancellationToken ct)
+    {
+        long userId = 0;
+        var imported = false;
+        try
+        {
+            userId = (await S.CallAsync(new SearchUserByPhoneNumber { PhoneNumber = e164, OnlyLocal = true }, ct).ConfigureAwait(false)).Id;
+        }
+        catch (TelegramCallException e) when (e.Code == 404 || e.Code == 400)
+        {
+            // not known locally
+        }
+        if (userId == 0)
+        {
+            var result = await S.CallAsync(new ImportContacts
+            {
+                Contacts = [new ImportedContact { PhoneNumber = e164, FirstName = contactName, LastName = "" }],
+            }, ct).ConfigureAwait(false);
+            userId = result.UserIds is [var id, ..] ? id : 0;
+            imported = true;
+        }
+        if (userId == 0) return null;
+        var chat = await S.CallAsync(new CreatePrivateChat { UserId = userId, Force = false }, ct).ConfigureAwait(false);
+        return new TgPhoneChat(await MapChat(chat, ct).ConfigureAwait(false), imported);
+    }
+
+    /// <inheritdoc />
     public Task EditMessageTextAsync(long chatId, long messageId, string text, CancellationToken ct) =>
         S.CallAsync(new EditMessageText
         {

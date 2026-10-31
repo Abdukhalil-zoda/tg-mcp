@@ -32,6 +32,15 @@ public sealed class DraftCommands
         var draft = await _drafts.GetAsync(id, ct).ConfigureAwait(false);
         if (draft is null) return ToolResult.Error($"no draft with id {id}");
         if (draft.Kind == Draft.JoinKind && draft.Join is { } join) return await ApproveJoinAsync(draft, join, ct).ConfigureAwait(false);
+        if (draft.Kind == Draft.PhoneKind && draft.Phone is { } phone)
+        {
+            return await _c.Runner.RunAsync("approve", [Need.Write], async token =>
+            {
+                var outcome = await PhoneMessages.ApproveAsync(_c, draft, phone, token).ConfigureAwait(false);
+                if (!outcome.Result.IsError) await _drafts.DeleteAsync(draft.Id, token).ConfigureAwait(false);
+                return outcome;
+            }, ct).ConfigureAwait(false);
+        }
         if (draft.Kind == Draft.EditKind && draft.Edit is { } edit) return await ApproveEditAsync(draft, edit, ct).ConfigureAwait(false);
         if (draft.Kind == Draft.DeleteKind && draft.Delete is { } delete) return await ApproveDeleteAsync(draft, delete, ct).ConfigureAwait(false);
         if (draft.Kind == Draft.ForwardKind && draft.Forward is { } forward) return await ApproveForwardAsync(draft, forward, ct).ConfigureAwait(false);

@@ -132,6 +132,7 @@
     "maxMediaMb": 50,            // largest file download_media will fetch, >= 1
     "sendsPerMinute": 10,        // send_message calls (sent or drafted) per chat per minute, >= 1
     "joinsPerHour": 5,           // join_chat calls (joined or drafted) per hour, >= 1
+    "newChatsPerDay": 3,         // messages to new people by phone (sent or drafted) per 24 hours, >= 1
     "mediaRetentionDays": 7,     // delete downloaded media older than N days; 0 = keep forever
   },
 
@@ -140,6 +141,17 @@
   // `tgmcp approve <id>`. "on": deleted at once, but only in chats with "write": "on".
   "delete": {
     "mode": "draft",
+  },
+
+  // Messaging people by PHONE NUMBER (send_message with "phone"). Needs "features.send": true.
+  // WARNING: messaging strangers is the classic spam pattern; Telegram may limit or ban the account.
+  // The allowed numbers are NOT listed here: they go in the environment variable TGMCP_ContactsAllow
+  // (E.164, comma-separated, e.g. +15551234567). Putting them in this file makes the config invalid.
+  //   "off"   (default) denied
+  //   "draft" (recommended) nothing is imported or sent until you run `tgmcp approve <id>`
+  //   "on"    imports exactly one contact and sends at once (only allow-listed numbers)
+  "contacts": {
+    "mode": "off",
   },
 
   // Joining groups/channels (needs "features.join": true). Messages in other chats may try to make the assistant

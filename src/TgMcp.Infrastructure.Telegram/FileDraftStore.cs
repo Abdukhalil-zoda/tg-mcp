@@ -34,6 +34,10 @@ public sealed class FileDraftStore : IDraftStore
         WriteAsync(new Draft(NewId(), _time.GetUtcNow(), chatTitle, null, Draft.JoinKind, join), ct);
 
     /// <inheritdoc />
+    public Task<Draft> SavePhoneAsync(PendingPhoneMessage message, CancellationToken ct) =>
+        WriteAsync(new Draft(NewId(), _time.GetUtcNow(), message.ContactName, null, Draft.PhoneKind, Phone: message), ct);
+
+    /// <inheritdoc />
     public Task<Draft> SaveEditAsync(string chatTitle, PendingEdit edit, CancellationToken ct) =>
         WriteAsync(new Draft(NewId(), _time.GetUtcNow(), chatTitle, null, Draft.EditKind, Edit: edit), ct);
 

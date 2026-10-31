@@ -6,6 +6,11 @@ and the project uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `send_message` with `phone` (+ `contact_name`): messages a person by E.164 phone number. Off by default;
+  `"contacts": { "mode": "draft" }` (recommended) stores it for `tgmcp approve`, `"on"` imports exactly one
+  contact and sends. Numbers must be listed in the environment-only `TGMCP_ContactsAllow` (validated,
+  refused in the file, redacted in `config check`); `limits.newChatsPerDay` (default 3); the number is
+  never audited in clear.
 - Opt-in integration tests against Telegram's test DC (`tests/TgMcp.IntegrationTests`: login, send
   confirmation, history/search, inbound stream), skipped unless `TGMCP_IT_ApiId`/`TGMCP_IT_ApiHash`/
   `TGMCP_IT_Phone` are set; manual workflow `integration.yml`; env-only `TGMCP_UseTestDc`.

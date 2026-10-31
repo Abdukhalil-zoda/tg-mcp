@@ -104,6 +104,12 @@ public sealed class PolicyConfig
         "ApiId", "ApiHash", "DatabaseKey", "DatabaseKeyFile", "AuditPath", "DataDir", "ConfigFile", "UseTestDc",
     };
 
+    /// <summary>Policy keys that may only come from the environment (sensitive values, redacted in reports).</summary>
+    public static readonly IReadOnlySet<string> EnvOnlyPolicyKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "ContactsAllow",
+    };
+
     /// <summary>Secrets: refused in the config file.</summary>
     public static readonly IReadOnlySet<string> SecretKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
@@ -149,6 +155,15 @@ public sealed class PolicyConfig
 
     /// <summary>limits.mediaRetentionDays: downloaded media older than this is deleted (0 = keep forever).</summary>
     public int MediaRetentionDays { get; private set; } = 7;
+
+    /// <summary>contacts.mode: messaging people by phone number. off (default) | draft (owner approves) | on.</summary>
+    public WriteMode ContactsMode { get; private set; } = WriteMode.Off;
+
+    /// <summary>TGMCP_ContactsAllow (environment only): E.164 numbers that may be messaged by phone.</summary>
+    public IReadOnlyList<string> ContactsAllow { get; private set; } = [];
+
+    /// <summary>limits.newChatsPerDay: messages to new people by phone (sent or drafted) per 24 hours.</summary>
+    public int NewChatsPerDay { get; private set; } = 3;
 
     /// <summary>limits.joinsPerHour: join_chat calls (joined or drafted) per hour.</summary>
     public int JoinsPerHour { get; private set; } = 5;
@@ -229,9 +244,9 @@ public sealed class PolicyConfig
         foreach (var e in ordered)
         {
             var segments = e.Key.Split(':');
-            if (e.Origin == ConfigOrigin.File && segments.Length == 1 && RuntimeKeys.Contains(segments[0]))
+            if (e.Origin == ConfigOrigin.File && segments.Length == 1 && (RuntimeKeys.Contains(segments[0]) || EnvOnlyPolicyKeys.Contains(segments[0])))
             {
-                var name = RuntimeKeys.First(k => k.Equals(segments[0], StringComparison.OrdinalIgnoreCase));
+                var name = RuntimeKeys.Concat(EnvOnlyPolicyKeys).First(k => k.Equals(segments[0], StringComparison.OrdinalIgnoreCase));
                 c._errors.Add(SecretKeys.Contains(name)
                     ? $"{e.Key}: secrets are not allowed in the config file; set {Prefix}{name} in the environment instead"
                     : $"{e.Key}: only allowed as the environment variable {Prefix}{name}");
@@ -355,6 +370,13 @@ public sealed class PolicyConfig
             if (p.Length == 1 && RuntimeKeys.Contains(p[0])) continue; // environment-only runtime settings
             switch (p[0].ToLowerInvariant())
             {
+                case "contactsallow" when p.Length == 1:
+                    ContactsAllow = PhoneList(key, value);
+                    break;
+                case "contacts" when p.Length == 2:
+                    if (p[1].Equals("mode", StringComparison.OrdinalIgnoreCase)) ContactsMode = Write(key, value) ?? WriteMode.Off;
+                    else Unknown(key);
+                    break;
                 case "enabled" when p.Length == 1:
                     Enabled = Bool(key, value);
                     break;
@@ -391,6 +413,7 @@ public sealed class PolicyConfig
                         case "maxmessagespercall": MaxMessagesPerCall = Positive(key, value) ?? MaxMessagesPerCall; break;
                         case "rateperminute": RatePerMinute = Positive(key, value) ?? RatePerMinute; break;
                         case "maxmediamb": MaxMediaMb = Positive(key, value) ?? MaxMediaMb; break;
+                        case "newchatsperday": NewChatsPerDay = Positive(key, value) ?? NewChatsPerDay; break;
                         case "joinsperhour": JoinsPerHour = Positive(key, value) ?? JoinsPerHour; break;
                         case "sendsperminute": SendsPerMinute = Positive(key, value) ?? SendsPerMinute; break;
                         case "mediaretentiondays": MediaRetentionDays = NonNegative(key, value) ?? MediaRetentionDays; break;
@@ -607,6 +630,19 @@ public sealed class PolicyConfig
         return set.Count == 0 ? null : set; // empty list = no topic restriction
     }
 
+    private List<string> PhoneList(string key, string v)
+    {
+        var list = new List<string>();
+        var n = 0;
+        foreach (var item in Split(v))
+        {
+            n++;
+            if (PhoneNumber.TryNormalize(item, out var e164)) list.Add(e164!);
+            else _errors.Add($"{key}: entry #{n} is not an E.164 phone number like +15551234567 (value not shown)");
+        }
+        return list;
+    }
+
     private IReadOnlyList<JoinAllowEntry> AllowList(string key, string v)
     {
         var list = new List<JoinAllowEntry>();
@@ -643,6 +679,7 @@ public sealed class PolicyConfig
         foreach (var d in Denies) sb.Append($"{d.Label}\n");
         sb.Append($"limits list_chats={Names.Snake(ListChats)} max_messages_per_call={MaxMessagesPerCall} rate_per_minute={RatePerMinute} max_media_mb={MaxMediaMb} media_retention_days={MediaRetentionDays} sends_per_minute={SendsPerMinute} joins_per_hour={JoinsPerHour}\n");
         sb.Append($"delete mode={Names.Snake(DeleteMode)}\n");
+        sb.Append($"contacts mode={Names.Snake(ContactsMode)} allow={string.Join(",", ContactsAllow.Select(PhoneNumber.Redact).Order(StringComparer.Ordinal))} new_chats_per_day={NewChatsPerDay}\n");
         sb.Append($"join mode={Names.Snake(JoinMode)} allow={string.Join(",", JoinAllow.Select(a => a.ToString()).Order(StringComparer.Ordinal))}\n");
         return sb.ToString();
     }
@@ -651,7 +688,7 @@ public sealed class PolicyConfig
     {
         if (IsValid) return Hash(Normalized());
         // Invalid: hash the raw policy keys (runtime keys, which may hold secrets, are excluded).
-        var raw = string.Join("\n", kv.Where(e => !RuntimeKeys.Contains(e.Key))
+        var raw = string.Join("\n", kv.Where(e => !RuntimeKeys.Contains(e.Key) && !EnvOnlyPolicyKeys.Contains(e.Key))
             .OrderBy(e => e.Key, StringComparer.OrdinalIgnoreCase)
             .Select(e => $"{e.Key.ToLowerInvariant()}={e.Value}"));
         return Hash("invalid\n" + raw);

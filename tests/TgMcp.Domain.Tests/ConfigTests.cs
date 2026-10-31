@@ -197,6 +197,52 @@ public class ConfigTests
         Assert.Contains("notify=true", report, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("+15551234567", true)]
+    [InlineData("+1 (555) 123-4567", true)]
+    [InlineData("+44 7700 900123", true)]
+    [InlineData("15551234567", false)]
+    [InlineData("+0123456789", false)]
+    [InlineData("+1555", false)]
+    [InlineData("+1555123456789012", false)]
+    [InlineData("+1555abc4567", false)]
+    public void Phone_numbers_are_validated_as_E164(string input, bool ok) =>
+        Assert.Equal(ok, PhoneNumber.TryNormalize(input, out _));
+
+    [Fact]
+    public void Contacts_allow_list_is_env_only_validated_and_redacted()
+    {
+        var c = PolicyConfig.FromPairs(("ContactsAllow", "+15551234567, +447700900123"), ("Contacts__Mode", "draft"));
+        Assert.True(c.IsValid, string.Join("; ", c.Errors));
+        Assert.Equal(["+15551234567", "+447700900123"], c.ContactsAllow);
+        var report = string.Join("\n", ConfigReport.Describe(c));
+        Assert.Contains("TGMCP_ContactsAllow = 2 number(s): +…67 (#", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("5551234567", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("7700900123", report, StringComparison.Ordinal);
+        Assert.Contains("contacts.mode = draft [env]", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("5551234567", c.Normalized(), StringComparison.Ordinal);
+
+        var bad = PolicyConfig.FromPairs(("ContactsAllow", "+15551234567,5559876543"));
+        Assert.False(bad.IsValid);
+        Assert.Contains(bad.Errors, e => e.Contains("entry #2 is not an E.164", StringComparison.Ordinal));
+        Assert.DoesNotContain(bad.Errors, e => e.Contains("5559876543", StringComparison.Ordinal));
+
+        var inFile = PolicyConfig.Parse([new ConfigEntry("contactsAllow", "+15551234567", ConfigOrigin.File)]);
+        Assert.Contains(inFile.Errors, e => e.Contains("only allowed as the environment variable TGMCP_ContactsAllow", StringComparison.Ordinal));
+        Assert.DoesNotContain(inFile.Errors, e => e.Contains("5551234567", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Contacts_defaults()
+    {
+        var c = PolicyConfig.FromPairs();
+        Assert.Equal(WriteMode.Off, c.ContactsMode);
+        Assert.Empty(c.ContactsAllow);
+        Assert.Equal(3, c.NewChatsPerDay);
+        Assert.False(PolicyConfig.FromPairs(("Contacts__Bogus", "1")).IsValid);
+        Assert.False(PolicyConfig.FromPairs(("Contacts__Mode", "maybe")).IsValid);
+    }
+
     [Fact]
     public void Master_switch_off_denies_even_with_rules()
     {

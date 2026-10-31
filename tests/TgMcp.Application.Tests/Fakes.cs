@@ -130,6 +130,20 @@ internal sealed class FakeTelegram : ITelegramClient
         return Task.CompletedTask;
     }
 
+    public Dictionary<string, TgChat> PhoneUsers { get; } = [];
+    public List<(string Phone, string Name)> Imports { get; } = [];
+    public HashSet<string> LocalContacts { get; } = [];
+
+    public Task<TgPhoneChat?> ResolvePhoneAsync(string e164, string contactName, CancellationToken ct)
+    {
+        Calls++;
+        var known = LocalContacts.Contains(e164);
+        if (!known) Imports.Add((e164, contactName));
+        if (!PhoneUsers.TryGetValue(e164, out var chat)) return Task.FromResult<TgPhoneChat?>(null);
+        Chats[chat.Id] = chat;
+        return Task.FromResult<TgPhoneChat?>(new TgPhoneChat(chat, !known));
+    }
+
     public TelegramCallException? AiFailure { get; set; }
     public List<(string Kind, long Chat, long Message, string? Lang)> AiCalls { get; } = [];
 
@@ -278,6 +292,13 @@ internal sealed class MemoryDraftStore : IDraftStore
         return Task.FromResult(d);
     }
 
+    public Task<Draft> SavePhoneAsync(PendingPhoneMessage message, CancellationToken ct)
+    {
+        var d = new Draft($"{++_next:x8}", Harness.Now, message.ContactName, null, Draft.PhoneKind, Phone: message);
+        Drafts[d.Id] = d;
+        return Task.FromResult(d);
+    }
+
     public Task<Draft> SaveEditAsync(string chatTitle, PendingEdit edit, CancellationToken ct)
     {
         var d = new Draft($"{++_next:x8}", Harness.Now, chatTitle, null, Draft.EditKind, Edit: edit);
@@ -384,7 +405,9 @@ internal sealed class Harness
     public MemoryMediaStore Media { get; } = new();
     public MemoryDraftStore DraftStore { get; } = new();
     private ISendLimiter? _sendLimiter;
-    public SendMessageTool Send => new(Context, DraftStore, _sendLimiter ??= new PerChatRateLimiter(Policy.Config.SendsPerMinute, Time));
+    private INewChatLimiter? _newChats;
+    public SendMessageTool Send => new(Context, DraftStore, _sendLimiter ??= new PerChatRateLimiter(Policy.Config.SendsPerMinute, Time),
+        _newChats ??= new NewChatRateLimiter(Policy.Config.NewChatsPerDay, Time));
     public DraftCommands DraftCommands => new(DraftStore, Context, Audit);
     private IJoinLimiter? _joinLimiter;
     public JoinChatTool Join => new(Context, DraftStore, _joinLimiter ??= new JoinRateLimiter(Policy.Config.JoinsPerHour, Time));

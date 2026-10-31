@@ -51,6 +51,7 @@ TgMcp is a third-party Telegram client built on TDLib with **your own** `api_id`
 | `forward_message` | source: read + `forward` (`features.forward`); destination: a `write` mode (`features.send`) | Forwards 1–20 messages **as the owner**. Each message must pass the source's `sinceDays`/`topics` and be forwardable; protected content is refused. The destination needs no read access. `"on"` forwards at once; `"draft"` saves a forward draft for `tgmcp approve <id>`. Optional `to_topic_id` (required if the destination rule has `topics`) and `send_copy` (no "forwarded from" header). Deny rules win on either side, and `limits.sendsPerMinute` applies to the destination. |
 | `edit_message` | `edit_own` (`features.editOwn`) + the chat's `write` mode (`features.send`) | Replaces the text of a message **that TgMcp itself sent**, as the owner. Other messages are refused, including your own sent from other apps. TgMcp keeps a sent-log of chat and message ids, no text, in `/data/sent-log.json`. `"on"` edits at once; `"draft"` saves an edit draft. Only if Telegram still allows editing. |
 | `delete_message` | `delete_own` (`features.deleteOwn`) + the chat's `write` mode (`features.send`) | Deletes up to 20 messages **that TgMcp itself sent**. Every deletion is a draft for `tgmcp approve <id>`, unless the chat has `"write": "on"` **and** `"delete": { "mode": "on" }`. `for_everyone: true` deletes them for all participants (explicit flag); otherwise only for you. |
+| `send_message` with `phone` | `features.send` + `contacts.mode` + the number in `TGMCP_ContactsAllow` (env only) | Messages a person **by phone number** instead of `chat`. `"off"` (default) denies; `"draft"` stores the message for `tgmcp approve <id>` without importing anything; `"on"` imports exactly one contact (named `contact_name`) and sends. `limits.newChatsPerDay` (default 3) applies. Deny rules and an explicit chat rule with `"write": "off"` on the resolved chat still win. The number is never written to the audit log (hash prefix only). **Messaging strangers can get the account limited or banned for spam.** |
 | `send_message` | `features.send` + the chat's `write` mode | Sends **as the owner's real account**. With `"write": "on"` the message is sent and the tool waits for Telegram's confirmation. With `"draft"` nothing is sent: a draft is saved for `tgmcp approve <id>`. With `"off"` the call is denied. Plain text up to 4096 characters, link previews off, optional `reply_to_message_id`, `topic_id` and `disable_notification`. `topics` restrict where it may post. `limits.sendsPerMinute` applies per chat. |
 | `summarize_message` | read + `summarize` (`features.summarize`) | Telegram's AI summary of one message (`summarizeMessage`), optionally translated (`translate_to`). Usually needs **Telegram Premium**; otherwise Telegram's error is returned. The result is third-party data. `sinceDays`/`topics` apply. |
 | `translate_message` | read + `translate` (`features.translate`) | Telegram's translation of one message (`translateMessageText`) into `to_language` (e.g. `en`, `pt-br`). May need Premium. |
@@ -247,6 +248,8 @@ The template [`tgmcp.example.jsonc`](tgmcp.example.jsonc) documents every option
 | `limits.sendsPerMinute` | integer ≥ 1. `send_message` calls per chat per minute, sent or drafted. | `10` |
 | `limits.joinsPerHour` | integer ≥ 1. `join_chat` calls per hour, joined or drafted. | `5` |
 | `delete.mode` | `"draft"` (every `delete_message` needs `tgmcp approve`) / `"on"` (delete at once in chats with `"write": "on"`) | `"draft"` |
+| `contacts.mode` | `"off"` / `"draft"` / `"on"`: `send_message` by `phone` | `"off"` |
+| `limits.newChatsPerDay` | integer ≥ 1. Messages to new people by phone per 24 h (sent or drafted). | `3` |
 | `join.mode` | `"off"` / `"draft"` / `"on"` | `"off"` |
 | `join.allow` | list: `"@username"`, `"username"`, `"t.me/…"` links, `"+InviteHash"`, `"*"` (anything; dangerous). Only used with `"on"`. | `[]` |
 | `defaults.notify`, `chats[].notify` | bool. Push new messages as events. Requires `read`. | `false` |
@@ -277,6 +280,7 @@ Finding a chat id: the denial message for a chat contains its id and a ready-to-
 | `TGMCP_ApiId`, `TGMCP_ApiHash` | Telegram API credentials (required for login and serving) |
 | `TGMCP_DatabaseKey` or `TGMCP_DatabaseKeyFile` | TDLib database encryption key, inline or as a path to a file |
 | `TGMCP_ConfigFile` | policy file, default `/config/tgmcp.json` |
+| `TGMCP_ContactsAllow` | phone numbers `send_message` may reach by `phone` (E.164, comma-separated). **Environment only**: refused in the file, validated, and redacted in `config check` (`+…67 (#hash)`) |
 | `TGMCP_DataDir` | data root, default `/data` (`tdlib/`, `files/`, `media/`, `audit.jsonl`) |
 | `TGMCP_AuditPath` | audit file, default `{DataDir}/audit.jsonl` |
 | `TGMCP_<Section>__<Key>` | override for any policy key, e.g. `TGMCP_Enabled=false`, `TGMCP_Limits__MaxMediaMb=10`, `TGMCP_Media__Dir=/media` |

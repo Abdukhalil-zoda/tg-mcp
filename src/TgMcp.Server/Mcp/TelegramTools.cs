@@ -129,13 +129,16 @@ public sealed class TelegramTools
         "Depending on the owner's policy for the chat it is sent immediately, or saved as a draft that the owner must approve " +
         "(the result says which). Use only when the owner asked for this message.")]
     public async Task<CallToolResult> SendMessage(
-        [Description("Chat id (e.g. -1001234567890) or @username.")] string chat,
         [Description("Plain text, 1-4096 characters. No markup is parsed; link previews are disabled.")] string text,
+        [Description("Chat id (e.g. -1001234567890) or @username. Leave empty when using phone.")] string? chat = null,
         [Description("Reply to this message id (0 = not a reply).")] long reply_to_message_id = 0,
         [Description("Forum topic id to post into (0 = none).")] int topic_id = 0,
         [Description("Send without a notification sound.")] bool disable_notification = false,
+        [Description("Instead of chat: an E.164 phone number (+15551234567) of a person to message. Only numbers the owner allow-listed; " +
+            "usually becomes a draft the owner approves. Messaging strangers can get the account limited for spam.")] string? phone = null,
+        [Description("With phone: the name under which the person is added to the owner's contacts.")] string? contact_name = null,
         CancellationToken cancellationToken = default) =>
-        Map(await _send.RunAsync(chat, text, reply_to_message_id, topic_id, disable_notification, cancellationToken).ConfigureAwait(false));
+        Map(await _send.RunAsync(chat, text, reply_to_message_id, topic_id, disable_notification, phone, contact_name, cancellationToken).ConfigureAwait(false));
 
     /// <summary>preview_chat.</summary>
     [McpServerTool(Name = "preview_chat", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]

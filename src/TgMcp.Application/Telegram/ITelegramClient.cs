@@ -119,6 +119,11 @@ public sealed record TgReactionOptions(IReadOnlyList<string> Emojis, IReadOnlyLi
 /// <param name="CanBeDeletedOnlyForSelf">deleteMessages without revoke is allowed.</param>
 public sealed record TgMessageProperties(bool CanBeForwarded, bool CanBeEdited, bool CanBeDeletedForAllUsers, bool CanBeDeletedOnlyForSelf);
 
+/// <summary>A private chat found by phone number.</summary>
+/// <param name="Chat">The private chat.</param>
+/// <param name="Imported">True if a contact had to be imported to reach the user.</param>
+public sealed record TgPhoneChat(TgChat Chat, bool Imported);
+
 /// <summary>Telegram is not usable right now (no credentials, not logged in, closed).</summary>
 /// <param name="message">Reason, safe to show to the client.</param>
 public sealed class TelegramUnavailableException(string message) : Exception(message);
@@ -215,6 +220,13 @@ public interface ITelegramClient
 
     /// <summary>Telegram's translation of a message (translateMessageText). May need Telegram Premium.</summary>
     Task<string> TranslateMessageAsync(long chatId, long messageId, string toLanguage, CancellationToken ct);
+
+    /// <summary>
+    /// The private chat with the Telegram user who has this phone number. Looks the number up locally first;
+    /// otherwise imports exactly one contact (importContacts) named <paramref name="contactName"/>. Null if the number
+    /// is not on Telegram or the user hides it.
+    /// </summary>
+    Task<TgPhoneChat?> ResolvePhoneAsync(string e164, string contactName, CancellationToken ct);
 
     /// <summary>Chat folder title to the ids of the chats currently in that folder.</summary>
     Task<IReadOnlyDictionary<string, IReadOnlySet<long>>> GetFolderChatsAsync(CancellationToken ct);

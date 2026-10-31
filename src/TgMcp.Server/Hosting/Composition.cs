@@ -79,6 +79,7 @@ public static class Composition
         services.AddSingleton<DownloadMediaTool>();
         services.AddSingleton<ISendLimiter>(sp => new PerChatRateLimiter(sp.GetRequiredService<IPolicy>().Config.SendsPerMinute, sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<IDraftStore, FileDraftStore>();
+        services.AddSingleton<INewChatLimiter>(sp => new NewChatRateLimiter(sp.GetRequiredService<IPolicy>().Config.NewChatsPerDay, sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<SendMessageTool>();
         services.AddSingleton<IJoinLimiter>(sp => new JoinRateLimiter(sp.GetRequiredService<IPolicy>().Config.JoinsPerHour, sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<JoinChatTool>();
