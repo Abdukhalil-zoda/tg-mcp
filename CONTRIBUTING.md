@@ -8,7 +8,7 @@ ground rules keep it safe and small. Please also read the [Code of Conduct](CODE
 1. **Security first.** Every tool is gated by the policy: a global switch (`features.x`) **and** a per-chat
    rule (feature list or write mode), deny rules always win. Calls are audited without message content.
    Tools in the "must not exist" list (payments/Stars/gifts, bot buttons and inline queries, account,
-   privacy, 2FA or session settings, joining/leaving/deleting chats, admin actions, Business settings,
+   privacy, 2FA or session settings, leaving/deleting chats, admin actions, Business settings,
    contact export, bulk operations) will not be accepted.
 2. **No secrets or personal data** in code, tests, fixtures, issues, logs or screenshots. Use placeholder
    ids such as `-1001234567890` and usernames such as `example_channel`.

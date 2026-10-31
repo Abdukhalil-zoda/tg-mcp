@@ -6,6 +6,11 @@ and the project uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `join_chat` and `preview_chat`: join (or preview) a group/channel by `@username`, `t.me/username` or an
+  invite link. Gated by `features.join` and the new `join` section: `"mode": "off"` (default) | `"draft"`
+  (owner approves with `tgmcp approve`) | `"on"` (only targets in `join.allow`; `"*"` allowed but flagged).
+  Deny rules apply to the resolved chat; `limits.joinsPerHour` (default 5); joined chats get no access
+  until a rule is added (the result shows it); invite hashes are never audited (sha256 prefix only).
 - Inbound events: with `events.enabled`, new messages from chats with `"notify": true` (requires `read`)
   are pushed as `notifications/claude/channel` (experimental `claude/channel` capability), with an
   untrusted-data marker, truncation (`events.maxTextChars`), media descriptions, string meta including

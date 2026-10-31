@@ -57,6 +57,7 @@
     "search": true,         // search_chat, search_all
     "mediaDownload": false, // download_media
     "send": false,          // send_message: writing AS YOU, as drafts or directly (see "write" per chat)
+    "join": false,          // join_chat / preview_chat: joining groups/channels AS YOU (see "join" below)
     // Reserved for later versions (accepted and validated, currently without effect):
     "summarize": false,
     "translate": false,
@@ -129,7 +130,22 @@
     "ratePerMinute": 30,         // tool calls per minute for the whole server, >= 1
     "maxMediaMb": 50,            // largest file download_media will fetch, >= 1
     "sendsPerMinute": 10,        // send_message calls (sent or drafted) per chat per minute, >= 1
+    "joinsPerHour": 5,           // join_chat calls (joined or drafted) per hour, >= 1
     "mediaRetentionDays": 7,     // delete downloaded media older than N days; 0 = keep forever
+  },
+
+  // Joining groups/channels (needs "features.join": true). Messages in other chats may try to make the assistant
+  // join spam or phishing groups, so the default is "off" and "draft" is recommended.
+  //   "off"   join_chat is denied
+  //   "draft" nothing is joined; a join draft waits for `tgmcp approve <id>` (or `tgmcp reject <id>`)
+  //   "on"    joins immediately, but ONLY targets listed in "allow" (empty list = nothing)
+  // "allow" entries: "@example_channel", "example_channel", "t.me/example_channel", "+InviteHash"
+  //   (from https://t.me/+InviteHash), or "*" for anything (DANGEROUS: any link in any message could be joined).
+  // Joining never grants read/write: the joined chat falls under "defaults" until you add a rule for it
+  // (the join_chat result shows the exact rule).
+  "join": {
+    "mode": "off",
+    "allow": [],
   },
 
   // Inbound events: new messages from chats with "notify": true are pushed into the assistant's session

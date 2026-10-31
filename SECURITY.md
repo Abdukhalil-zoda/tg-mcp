@@ -25,7 +25,8 @@ TgMcp gives an AI assistant access to a Telegram **user** account. Primary threa
 | Excessive or abusive API use | Token-bucket rate limit, per-call message cap, bounded FLOOD_WAIT retry that honors the server's wait |
 | Secrets leak through logs or audit | api_id/api_hash/database key come only from env or a file; never logged, never hashed; audit stores no message text or queries |
 | Container escape / tampering | Non-root user; works with `--read-only`, `--cap-drop ALL`, `no-new-privileges`; state only in `/data` |
-| Dangerous account operations | Payment, account/security settings, chat join/leave/delete, admin, contact export and bulk tools do not exist in the code |
+| Joining spam or phishing chats because a message asked (prompt injection) | `join_chat` needs `features.join` **and** `join.mode`; default `"off"`; `"draft"` (recommended) waits for `tgmcp approve`; `"on"` only joins targets in `join.allow`; deny rules checked on the resolved chat; `limits.joinsPerHour` (default 5); a joined chat gets no read/write access; invite hashes never audited (sha256 prefix only) |
+| Dangerous account operations | Payment, account/security settings, chat leave/delete, admin, contact export and bulk tools do not exist in the code |
 
 Out of scope: a compromised host or Docker daemon, or an attacker who can edit the env files —
 they control the policy by definition. Protect the env file with `chmod 600` and the policy file with `chown root:1654` + `chmod 0640`.

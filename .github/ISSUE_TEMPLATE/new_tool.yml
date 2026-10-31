@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Tools that will not be accepted: payments/Stars/gifts, bot buttons and inline queries, account, privacy,
-        2FA or session settings, joining/leaving/deleting chats, admin actions, Business settings, contact export,
+        2FA or session settings, leaving/deleting chats, admin actions, Business settings, contact export,
         and bulk operations.
   - type: input
     id: name
