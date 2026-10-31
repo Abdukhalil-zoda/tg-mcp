@@ -213,6 +213,38 @@ public sealed class TdTelegramClient : ITelegramClient, IInboundMessageSource, I
             : $"TDLib could not open its database: {tdError}";
 
     /// <inheritdoc />
+    public async Task<TgReactionOptions> GetReactionOptionsAsync(long chatId, long messageId, CancellationToken ct)
+    {
+        var available = await S.CallAsync(new GetMessageAvailableReactions { ChatId = chatId, MessageId = messageId, RowSize = 8 }, ct).ConfigureAwait(false);
+        var all = (available.TopReactions ?? []).Concat(available.RecentReactions ?? []).Concat(available.PopularReactions ?? [])
+            .Where(r => r.Type is ReactionType.ReactionTypeEmoji).ToList();
+        string E(AvailableReaction r) => ((ReactionType.ReactionTypeEmoji)r.Type).Emoji;
+        var free = all.Where(r => !r.NeedsPremium).Select(E).Distinct().ToList();
+        var premium = all.Where(r => r.NeedsPremium).Select(E).Except(free).Distinct().ToList();
+        var message = await S.CallAsync(new GetMessage { ChatId = chatId, MessageId = messageId }, ct).ConfigureAwait(false);
+        var chosen = (message.InteractionInfo?.Reactions?.Reactions ?? [])
+            .Where(r => r.IsChosen && r.Type is ReactionType.ReactionTypeEmoji)
+            .Select(r => ((ReactionType.ReactionTypeEmoji)r.Type).Emoji).ToList();
+        var unavailable = available.UnavailabilityReason?.GetType().Name;
+        return new TgReactionOptions(free, premium, chosen, unavailable);
+    }
+
+    /// <inheritdoc />
+    public Task AddReactionAsync(long chatId, long messageId, string emoji, CancellationToken ct) =>
+        S.CallAsync(new AddMessageReaction
+        {
+            ChatId = chatId, MessageId = messageId, ReactionType = new ReactionType.ReactionTypeEmoji { Emoji = emoji },
+            IsBig = false, UpdateRecentReactions = false,
+        }, ct);
+
+    /// <inheritdoc />
+    public Task RemoveReactionAsync(long chatId, long messageId, string emoji, CancellationToken ct) =>
+        S.CallAsync(new RemoveMessageReaction
+        {
+            ChatId = chatId, MessageId = messageId, ReactionType = new ReactionType.ReactionTypeEmoji { Emoji = emoji },
+        }, ct);
+
+    /// <inheritdoc />
     public async Task<long?> MarkReadAsync(long chatId, long? upToMessageId, CancellationToken ct)
     {
         var upTo = upToMessageId;

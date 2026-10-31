@@ -26,12 +26,14 @@ public sealed class TelegramTools
     private readonly JoinChatTool _join;
     private readonly PreviewChatTool _preview;
     private readonly MarkReadTool _markRead;
+    private readonly ReactTool _react;
 
     /// <summary>Created per call by the MCP host.</summary>
     public TelegramTools(ListChatsTool list, ReadMessagesTool read, ReadTopicTool topic, GetMessageTool get,
         SearchChatTool searchChat, SearchAllTool searchAll, DownloadMediaTool download, SendMessageTool send,
-        JoinChatTool join, PreviewChatTool preview, MarkReadTool markRead)
+        JoinChatTool join, PreviewChatTool preview, MarkReadTool markRead, ReactTool react)
     {
+        _react = react;
         _markRead = markRead;
         _join = join;
         _preview = preview;
@@ -154,6 +156,17 @@ public sealed class TelegramTools
         [Description("Mark messages up to and including this id as read (0 = everything).")] long up_to_message_id = 0,
         CancellationToken cancellationToken = default) =>
         Map(await _markRead.RunAsync(chat, up_to_message_id, cancellationToken).ConfigureAwait(false));
+
+    /// <summary>react.</summary>
+    [McpServerTool(Name = "react", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true)]
+    [Description("Put an emoji reaction on a message AS THE OWNER (everyone in the chat sees it), or remove the owner's reactions when emoji is empty. " +
+        "Depending on the owner's policy it is applied at once or saved as a draft the owner approves. Only reactions offered for the message are accepted.")]
+    public async Task<CallToolResult> React(
+        [Description("Chat id (e.g. -1001234567890) or @username.")] string chat,
+        [Description("Message id to react to.")] long message_id,
+        [Description("One emoji such as 👍 (must be available for this message); empty or null removes the owner's reactions.")] string? emoji = null,
+        CancellationToken cancellationToken = default) =>
+        Map(await _react.RunAsync(chat, message_id, emoji, cancellationToken).ConfigureAwait(false));
 
     private static CallToolResult Map(ToolResult r) => new()
     {

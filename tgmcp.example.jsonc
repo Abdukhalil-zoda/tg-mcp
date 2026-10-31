@@ -59,10 +59,11 @@
     "send": false,          // send_message: writing AS YOU, as drafts or directly (see "write" per chat)
     "join": false,          // join_chat / preview_chat: joining groups/channels AS YOU (see "join" below)
     "markRead": false,      // mark_read: marks chats read AS YOU (clears unread counters, senders see read receipts)
+    "react": false,         // react: emoji reactions AS YOU; also needs "send": true and a chat "write" mode
+                            // ("draft" = you approve each reaction with `tgmcp approve <id>`)
     // Reserved for later versions (accepted and validated, currently without effect):
     "summarize": false,
     "translate": false,
-    "react": false,
     "editOwn": false,
     "deleteOwn": false,
     "forward": false,
@@ -73,8 +74,8 @@
   "defaults": {
     "read": false,          // true = every chat not denied becomes readable (not recommended)
     "write": "off",         // "off" | "draft" (you approve each message: `tgmcp approve <id>`) | "on" (sent at once)
-    "features": [],         // per-chat features: "search", "media_download", "mark_read"
-                            // (+ reserved: "summarize", "translate", "react", "edit_own", "delete_own", "forward", "pin")
+    "features": [],         // per-chat features: "search", "media_download", "mark_read", "react"
+                            // (+ reserved: "summarize", "translate", "edit_own", "delete_own", "forward", "pin")
     "sinceDays": null,      // hide messages older than N days; null = no limit
     "notify": false,        // push new messages as events (see "events"); needs "read": true.
                             // Never applies to bot/channel chats or bot senders: those need an explicit rule.

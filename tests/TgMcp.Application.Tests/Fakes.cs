@@ -107,6 +107,29 @@ internal sealed class FakeTelegram : ITelegramClient
         return Task.FromResult(new TgSent(message.ChatId, 1000 + Sent.Count, Harness.Now));
     }
 
+    public TgReactionOptions ReactionOptions { get; set; } = new(["👍", "❤", "🔥"], ["🤩"], [], null);
+    public List<(long Chat, long Message, string Emoji, bool Added)> Reactions { get; } = [];
+
+    public Task<TgReactionOptions> GetReactionOptionsAsync(long chatId, long messageId, CancellationToken ct)
+    {
+        Calls++;
+        return Task.FromResult(ReactionOptions);
+    }
+
+    public Task AddReactionAsync(long chatId, long messageId, string emoji, CancellationToken ct)
+    {
+        Calls++;
+        Reactions.Add((chatId, messageId, emoji, true));
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveReactionAsync(long chatId, long messageId, string emoji, CancellationToken ct)
+    {
+        Calls++;
+        Reactions.Add((chatId, messageId, emoji, false));
+        return Task.CompletedTask;
+    }
+
     public List<(long Chat, long? UpTo)> MarkedRead { get; } = [];
 
     public Task<long?> MarkReadAsync(long chatId, long? upToMessageId, CancellationToken ct)
@@ -199,6 +222,13 @@ internal sealed class MemoryDraftStore : IDraftStore
         return Task.FromResult(d);
     }
 
+    public Task<Draft> SaveReactionAsync(string chatTitle, PendingReaction reaction, CancellationToken ct)
+    {
+        var d = new Draft($"{++_next:x8}", Harness.Now, chatTitle, null, Draft.ReactionKind, Reaction: reaction);
+        Drafts[d.Id] = d;
+        return Task.FromResult(d);
+    }
+
     public Task<IReadOnlyList<Draft>> ListAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<Draft>>([.. Drafts.Values]);
     public Task<Draft?> GetAsync(string id, CancellationToken ct) => Task.FromResult(Drafts.GetValueOrDefault(id));
     public Task<bool> DeleteAsync(string id, CancellationToken ct) => Task.FromResult(Drafts.Remove(id));
@@ -263,6 +293,7 @@ internal sealed class Harness
     public JoinChatTool Join => new(Context, DraftStore, _joinLimiter ??= new JoinRateLimiter(Policy.Config.JoinsPerHour, Time));
     public PreviewChatTool Preview => new(Context);
     public MarkReadTool MarkRead => new(Context);
+    public ReactTool React => new(Context, DraftStore, _sendLimiter ??= new PerChatRateLimiter(Policy.Config.SendsPerMinute, Time));
     public FakeNotifier Notifier { get; } = new();
     public MemoryEventState EventState { get; } = new();
     private InboundEventProcessor? _events;

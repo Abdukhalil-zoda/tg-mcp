@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `react(chat, message_id, emoji?)`: adds an emoji reaction as the owner or removes the owner's reactions.
+  Needs `features.react` + `features.send`, and `read` + `"react"` + a `write` mode in the chat rule:
+  `"on"` applies it, `"draft"` saves a reaction draft for `tgmcp approve`. Validated against
+  `getMessageAvailableReactions` (Premium-only, paid and custom reactions are rejected).
 - `mark_read(chat, up_to_message_id?)`: marks a chat read as the owner (`viewMessages` with force_read;
   without an id also `readAllChatMentions`/`readAllChatReactions`). Needs `features.markRead` and
   `read` + `"mark_read"` in the chat rule; refused for topic-restricted rules. Changes the owner's

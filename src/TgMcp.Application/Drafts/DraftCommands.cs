@@ -32,6 +32,7 @@ public sealed class DraftCommands
         var draft = await _drafts.GetAsync(id, ct).ConfigureAwait(false);
         if (draft is null) return ToolResult.Error($"no draft with id {id}");
         if (draft.Kind == Draft.JoinKind && draft.Join is { } join) return await ApproveJoinAsync(draft, join, ct).ConfigureAwait(false);
+        if (draft.Kind == Draft.ReactionKind && draft.Reaction is { } reaction) return await ApproveReactionAsync(draft, reaction, ct).ConfigureAwait(false);
         if (draft.Message is null) return ToolResult.Error($"draft {id} is malformed");
         return await _c.Runner.RunAsync("approve", [Need.Write], async token =>
         {
@@ -72,13 +73,25 @@ public sealed class DraftCommands
                 JoinSupport.AuditReason(target, jd.Mode, $"draft {draft.Id} approved, {joined.Status}"));
         }, ct);
 
+    /// <summary>Applies a drafted reaction after re-checking the policy and the available reactions.</summary>
+    private Task<ToolResult> ApproveReactionAsync(Draft draft, PendingReaction reaction, CancellationToken ct) =>
+        _c.Runner.RunAsync("approve", [Need.Read, Need.React, Need.Write], async token =>
+        {
+            var target = await _c.Telegram.GetChatAsync(reaction.ChatId, token).ConfigureAwait(false);
+            var gate = await ReactionGate.CheckAsync(_c, target, reaction.MessageId, reaction.Emoji, token).ConfigureAwait(false);
+            if (gate.Denied is not null) return gate.Denied;
+            var done = await ReactionGate.ApplyAsync(_c.Telegram, target.Id, reaction.MessageId, reaction.Emoji, gate.Options!, token).ConfigureAwait(false);
+            await _drafts.DeleteAsync(draft.Id, token).ConfigureAwait(false);
+            return ToolOutcome.Ok(done.Payload, target.Id, 1, gate.Decision!, $"draft {draft.Id} approved, {done.Audit}");
+        }, ct);
+
     /// <summary>Deletes a draft without sending it.</summary>
     public async Task<bool> RejectAsync(string id, CancellationToken ct)
     {
         var draft = await _drafts.GetAsync(id, ct).ConfigureAwait(false);
         if (draft is null) return false;
         await _drafts.DeleteAsync(id, ct).ConfigureAwait(false);
-        _audit.Write(new AuditEntry(_c.Time.GetUtcNow(), "reject", draft.Message?.ChatId ?? draft.Join?.ChatId, 0, true, "owner", $"{draft.Kind} draft {id} rejected"));
+        _audit.Write(new AuditEntry(_c.Time.GetUtcNow(), "reject", draft.Message?.ChatId ?? draft.Join?.ChatId ?? draft.Reaction?.ChatId, 0, true, "owner", $"{draft.Kind} draft {id} rejected"));
         return true;
     }
 }

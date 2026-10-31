@@ -29,6 +29,11 @@ public static class DraftCommandsCli
                             output.WriteLine($"{d.Id}  {d.CreatedUtc.UtcDateTime:yyyy-MM-dd HH:mm}Z  JOIN {what} \"{d.ChatTitle}\" ({j.Type}, {j.MemberCount} members)");
                             continue;
                         }
+                        if (d.Kind == Draft.ReactionKind && d.Reaction is { } r)
+                        {
+                            output.WriteLine($"{d.Id}  {d.CreatedUtc.UtcDateTime:yyyy-MM-dd HH:mm}Z  REACT {(r.Emoji ?? "(remove)")} on message {r.MessageId} in chat {r.ChatId} \"{d.ChatTitle}\"");
+                            continue;
+                        }
                         var preview = (d.Message?.Text ?? "").ReplaceLineEndings(" ");
                         if (preview.Length > 80) preview = preview[..80] + "...";
                         output.WriteLine($"{d.Id}  {d.CreatedUtc.UtcDateTime:yyyy-MM-dd HH:mm}Z  chat {d.Message?.ChatId} \"{d.ChatTitle}\"  {preview}");

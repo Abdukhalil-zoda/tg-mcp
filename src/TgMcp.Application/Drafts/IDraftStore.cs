@@ -13,15 +13,25 @@ namespace TgMcp.Application.Drafts;
 /// <param name="Message">The message to send (kind "message").</param>
 /// <param name="Kind">"message" or "join".</param>
 /// <param name="Join">The join to perform (kind "join").</param>
+/// <param name="Reaction">The reaction to set or remove (kind "reaction").</param>
 public sealed record Draft(string Id, DateTimeOffset CreatedUtc, string ChatTitle, OutgoingMessage? Message,
-    string Kind = Draft.MessageKind, PendingJoin? Join = null)
+    string Kind = Draft.MessageKind, PendingJoin? Join = null, PendingReaction? Reaction = null)
 {
+    /// <summary>Kind of a reaction draft.</summary>
+    public const string ReactionKind = "reaction";
+
     /// <summary>Kind of a message draft.</summary>
     public const string MessageKind = "message";
 
     /// <summary>Kind of a join draft.</summary>
     public const string JoinKind = "join";
 }
+
+/// <summary>A reaction waiting for the owner's approval.</summary>
+/// <param name="ChatId">Chat id.</param>
+/// <param name="MessageId">Message to react to.</param>
+/// <param name="Emoji">Emoji to add, or null to remove the owner's reactions.</param>
+public sealed record PendingReaction(long ChatId, long MessageId, string? Emoji);
 
 /// <summary>A join waiting for the owner's approval.</summary>
 /// <param name="TargetKind">Username or invite.</param>
@@ -43,6 +53,9 @@ public interface IDraftStore
 
     /// <summary>Saves a new join draft.</summary>
     Task<Draft> SaveJoinAsync(string chatTitle, PendingJoin join, CancellationToken ct);
+
+    /// <summary>Saves a new reaction draft.</summary>
+    Task<Draft> SaveReactionAsync(string chatTitle, PendingReaction reaction, CancellationToken ct);
 
     /// <summary>All drafts, oldest first.</summary>
     Task<IReadOnlyList<Draft>> ListAsync(CancellationToken ct);

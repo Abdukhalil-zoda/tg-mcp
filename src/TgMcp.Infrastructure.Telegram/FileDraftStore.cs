@@ -33,6 +33,10 @@ public sealed class FileDraftStore : IDraftStore
     public Task<Draft> SaveJoinAsync(string chatTitle, PendingJoin join, CancellationToken ct) =>
         WriteAsync(new Draft(NewId(), _time.GetUtcNow(), chatTitle, null, Draft.JoinKind, join), ct);
 
+    /// <inheritdoc />
+    public Task<Draft> SaveReactionAsync(string chatTitle, PendingReaction reaction, CancellationToken ct) =>
+        WriteAsync(new Draft(NewId(), _time.GetUtcNow(), chatTitle, null, Draft.ReactionKind, Reaction: reaction), ct);
+
     private async Task<Draft> WriteAsync(Draft draft, CancellationToken ct)
     {
         EnsureDir();

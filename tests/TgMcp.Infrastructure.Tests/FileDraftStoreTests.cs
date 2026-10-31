@@ -54,6 +54,18 @@ public class FileDraftStoreTests
         Assert.Equal("hi", old.Message!.Text);
     }
 
+    [Fact]
+    public async Task Reaction_drafts_round_trip()
+    {
+        using var dir = new TempDir();
+        var store = new FileDraftStore(Options.Create(new TelegramOptions { DataDir = dir.Path }), new FakeTimeProvider());
+        var d = await store.SaveReactionAsync("Work", new TgMcp.Application.Drafts.PendingReaction(-1001234567890, 42, "👍"), Ct);
+        var loaded = await store.GetAsync(d.Id, Ct);
+        Assert.Equal("reaction", loaded!.Kind);
+        Assert.Equal("👍", loaded.Reaction!.Emoji);
+        Assert.Equal(42, loaded.Reaction.MessageId);
+    }
+
     [Theory]
     [InlineData("../../etc/passwd")]
     [InlineData("ABCDEF12")]

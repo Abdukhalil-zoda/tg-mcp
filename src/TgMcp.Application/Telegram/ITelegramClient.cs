@@ -105,6 +105,13 @@ public sealed record TgChatPreview(long? ChatId, string Title, string Type, Chat
 /// <param name="Title">Chat title.</param>
 public sealed record TgJoinResult(string Status, long? ChatId, string Title);
 
+/// <summary>Reactions that may be put on a message.</summary>
+/// <param name="Emojis">Emoji reactions usable without Telegram Premium.</param>
+/// <param name="PremiumOnly">Emoji reactions that need Telegram Premium.</param>
+/// <param name="Chosen">Emoji reactions the owner has already put on the message.</param>
+/// <param name="Unavailable">Why reactions are unavailable (e.g. anonymous admin), or null.</param>
+public sealed record TgReactionOptions(IReadOnlyList<string> Emojis, IReadOnlyList<string> PremiumOnly, IReadOnlyList<string> Chosen, string? Unavailable);
+
 /// <summary>Telegram is not usable right now (no credentials, not logged in, closed).</summary>
 /// <param name="message">Reason, safe to show to the client.</param>
 public sealed class TelegramUnavailableException(string message) : Exception(message);
@@ -165,6 +172,15 @@ public interface ITelegramClient
     /// last message when null, in which case mentions and reactions are cleared too. Returns the id marked, or null if the chat is empty.
     /// </summary>
     Task<long?> MarkReadAsync(long chatId, long? upToMessageId, CancellationToken ct);
+
+    /// <summary>Available and already chosen emoji reactions for a message (getMessageAvailableReactions + the message's reactions).</summary>
+    Task<TgReactionOptions> GetReactionOptionsAsync(long chatId, long messageId, CancellationToken ct);
+
+    /// <summary>Adds an emoji reaction as the owner (addMessageReaction).</summary>
+    Task AddReactionAsync(long chatId, long messageId, string emoji, CancellationToken ct);
+
+    /// <summary>Removes the owner's emoji reaction (removeMessageReaction).</summary>
+    Task RemoveReactionAsync(long chatId, long messageId, string emoji, CancellationToken ct);
 
     /// <summary>Resolves a join target without joining (searchPublicChat / checkChatInviteLink).</summary>
     Task<TgChatPreview> PreviewJoinAsync(JoinTarget target, CancellationToken ct);

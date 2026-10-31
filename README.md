@@ -47,6 +47,7 @@ TgMcp is a third-party Telegram client built on TDLib with **your own** `api_id`
 | `preview_chat` | `features.join` | Shows what a target is without joining: title, type (group/supergroup/channel), member count, whether a join request is needed, whether you are already a member. |
 | `join_chat` | `features.join` + `join.mode` | Joins **with the owner's account**. `"off"` (default) denies. `"draft"` saves a join draft for `tgmcp approve <id>`. `"on"` joins only targets in `join.allow`. Accepts `@username`, `t.me/username`, `https://t.me/+HASH` and `t.me/joinchat/HASH`; anything else is rejected. Deny rules are checked on the resolved chat. `limits.joinsPerHour` (default 5) applies. Joining grants **no** read or write access: the result includes the chat id and the exact rule to add. |
 | `mark_read` | read + `mark_read` (`features.markRead`) | Marks a chat as read **as the owner**: unread counters clear on all your devices, and senders see read receipts. `up_to_message_id` marks up to that message; without it, everything is marked read, including mentions and reactions. Refused for topic-restricted rules, since it would also mark other topics read. |
+| `react` | read + `react` (`features.react`) + the chat's `write` mode (`features.send`) | Puts an emoji reaction on a message **as the owner**, or removes your reactions when `emoji` is empty. `"on"` applies it at once; `"draft"` saves a reaction draft for `tgmcp approve <id>`; `"off"` denies. Only reactions offered for that message (`getMessageAvailableReactions`) and usable without Premium are accepted. `sinceDays`/`topics` and `limits.sendsPerMinute` apply. |
 | `send_message` | `features.send` + the chat's `write` mode | Sends **as the owner's real account**. With `"write": "on"` the message is sent and the tool waits for Telegram's confirmation. With `"draft"` nothing is sent: a draft is saved for `tgmcp approve <id>`. With `"off"` the call is denied. Plain text up to 4096 characters, link previews off, optional `reply_to_message_id`, `topic_id` and `disable_notification`. `topics` restrict where it may post. `limits.sendsPerMinute` applies per chat. |
 | `download_media` | read + `media_download` | Size-capped by `limits.maxMediaMb`. Files of unknown size are refused. Files go to `media.dir` (default `/data/media`) and are deleted after `limits.mediaRetentionDays`. |
 
@@ -129,7 +130,7 @@ tgmcp reject <id>            # delete it without sending
 
 With Docker, use the same env file and volumes as the server, e.g. `docker run --rm --env-file /etc/tgmcp/tgmcp.env -v /etc/tgmcp/tgmcp.json:/config/tgmcp.json:ro -v tgmcp-data:/data tgmcp:<sha> approve 1a2b3c4d`.
 
-`approve` checks the policy again, so a chat that is now denied or has `"write": "off"` won't be sent to. It is audited like a tool call.
+Reactions with `"write": "draft"` are drafts too (`REACT 👍 on message …` in `tgmcp drafts`). `approve` checks the policy again, so a chat that is now denied or has `"write": "off"` won't be sent to. It is audited like a tool call.
 
 **Only one process may use the TDLib database at a time.** Once the MCP server has handled a call, it holds the database lock for its data directory. Stop or disconnect it (in Claude Code: `/mcp`) before `approve` or `login`. If the database is locked, the command fails with "the TDLib database is in use by another tgmcp process" instead of hanging. `drafts` and `reject` don't need TDLib and work at any time.
 
@@ -239,7 +240,7 @@ The template [`tgmcp.example.jsonc`](tgmcp.example.jsonc) documents every option
 | `media.dir` | absolute path where `download_media` stores files | `/data/media` |
 | `media.hostDir` | absolute host path of `media.dir`. If set, results also include `host_path`. This is pure string mapping, and nothing on the host is accessed. | none |
 
-Feature names in lists, in snake_case: `search`, `media_download`, `summarize`, `translate`, `react`, `mark_read`, `edit_own`, `delete_own`, `forward`, `pin`. In use: `search`, `media_download`, `mark_read`. The others are validated and reserved.
+Feature names in lists, in snake_case: `search`, `media_download`, `summarize`, `translate`, `react`, `mark_read`, `edit_own`, `delete_own`, `forward`, `pin`. In use: `search`, `media_download`, `mark_read`, `react`. The others are validated and reserved.
 
 Chat kinds: `private` covers people, secret chats and Saved Messages. `group` covers basic groups and supergroups that aren't channels. `channel` covers broadcast channels. `bot` is a private chat with a bot.
 
@@ -298,7 +299,7 @@ Image: `mcr.microsoft.com/dotnet/runtime:11.0.0-rc.3`, framework-dependent publi
 
 ## Limitations
 
-- `send_message` sends plain text only, with no formatting, media or polls. Other write features (`react`, `edit_own`, `delete_own`, `forward`, `pin`) are reserved.
+- `send_message` sends plain text only, with no formatting, media or polls. Other write features (`edit_own`, `delete_own`, `forward`, `pin`) are reserved. `react` supports emoji reactions only, without paid or custom-emoji reactions.
 - The policy is read once at start. Reconnect the MCP server after editing it.
 - `summarize` and `translate` are reserved. They will probably need Telegram Premium server-side features.
 - Login supports phone, code and 2FA password only. Email-code login, registering a new account and QR login aren't supported. Log in with an official app first if Telegram asks for these.
