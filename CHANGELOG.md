@@ -5,99 +5,57 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Added
-- `send_message` with `phone` (+ `contact_name`): messages a person by E.164 phone number. Off by default;
-  `"contacts": { "mode": "draft" }` (recommended) stores it for `tgmcp approve`, `"on"` imports exactly one
-  contact and sends. Numbers must be listed in the environment-only `TGMCP_ContactsAllow` (validated,
-  refused in the file, redacted in `config check`); `limits.newChatsPerDay` (default 3); the number is
-  never audited in clear.
-- Opt-in integration tests against Telegram's test DC (`tests/TgMcp.IntegrationTests`: login, send
-  confirmation, history/search, inbound stream), skipped unless `TGMCP_IT_ApiId`/`TGMCP_IT_ApiHash`/
-  `TGMCP_IT_Phone` are set; manual workflow `integration.yml`; env-only `TGMCP_UseTestDc`.
-- `summarize_message(chat, message_id, translate_to?)` and `translate_message(chat, message_id, to_language)`:
-  Telegram's built-in AI summary and translation (`summarizeMessage`, `translateMessageText`). Need
-  `features.summarize` / `features.translate` and `read` + `"summarize"` / `"translate"`; usually require
-  Telegram Premium (Telegram's error is passed through). Results are marked as third-party data.
-- Release workflow: on `v*` tags, a multi-arch image (linux/amd64, linux/arm64) is pushed to
-  `ghcr.io/abdukhalil-zoda/tg-mcp` with an SBOM, a provenance attestation and a keyless cosign signature.
-  The Dockerfile cross-publishes for the target architecture (`tdlib.native.linux-arm64` added).
-- `edit_message` and `delete_message`: edit or delete messages that TgMcp itself sent (tracked in
-  `/data/sent-log.json`, ids only). Need `features.editOwn` / `features.deleteOwn` + `features.send` and
-  `"edit_own"` / `"delete_own"` + a `write` mode in the chat rule. Edits follow the write mode; deletions
-  are always drafts unless `"write": "on"` and the new `"delete": { "mode": "on" }`. `for_everyone` must be
-  set explicitly to revoke for all participants.
-- `forward_message(from_chat, message_ids, to_chat, to_topic_id?, send_copy?)`: forwards up to 20 messages as
-  the owner. Source needs `read` + `"forward"` (`features.forward`) and each message must pass
-  `sinceDays`/`topics` and be forwardable; destination needs a `write` mode (`"on"` forwards, `"draft"`
-  saves a forward draft for `tgmcp approve`), no read required. Deny rules win on both sides.
-- `react(chat, message_id, emoji?)`: adds an emoji reaction as the owner or removes the owner's reactions.
-  Needs `features.react` + `features.send`, and `read` + `"react"` + a `write` mode in the chat rule:
-  `"on"` applies it, `"draft"` saves a reaction draft for `tgmcp approve`. Validated against
-  `getMessageAvailableReactions` (Premium-only, paid and custom reactions are rejected).
-- `mark_read(chat, up_to_message_id?)`: marks a chat read as the owner (`viewMessages` with force_read;
-  without an id also `readAllChatMentions`/`readAllChatReactions`). Needs `features.markRead` and
-  `read` + `"mark_read"` in the chat rule; refused for topic-restricted rules. Changes the owner's
-  visible unread state and read receipts.
-- `join_chat` and `preview_chat`: join (or preview) a group/channel by `@username`, `t.me/username` or an
-  invite link. Gated by `features.join` and the new `join` section: `"mode": "off"` (default) | `"draft"`
-  (owner approves with `tgmcp approve`) | `"on"` (only targets in `join.allow`; `"*"` allowed but flagged).
-  Deny rules apply to the resolved chat; `limits.joinsPerHour` (default 5); joined chats get no access
-  until a rule is added (the result shows it); invite hashes are never audited (sha256 prefix only).
-- Inbound events: with `events.enabled`, new messages from chats with `"notify": true` (requires `read`)
-  are pushed as `notifications/claude/channel` (experimental `claude/channel` capability), with an
-  untrusted-data marker, truncation (`events.maxTextChars`), media descriptions, string meta including
-  `write_mode`, a rate limit with drop summaries (`events.maxPerMinute`), optional catch-up
-  (`events.catchUpMinutes`, state in `/data/events-state.json`) and text-free audit records.
-  Bot/channel chats and bot senders need an explicit rule. TDLib starts eagerly when events are on.
-- Server `instructions` describing the untrusted-data rules and how to reply.
-- Media in message text is described with names and durations (`[document report.pdf]`, `[voice 12s]`).
-- `send_message`: plain-text messages as the owner. `"write": "on"` sends and waits for Telegram's
-  confirmation; `"draft"` saves an owner-only draft in `/data/drafts`; `"off"` is denied with a JSON hint.
-  Topics restrict where messages may go; `limits.sendsPerMinute` (default 10) limits sends per chat;
-  only the text length is audited.
-- Owner commands `drafts`, `approve <id>` (re-checks the policy, sends, deletes) and `reject <id>`.
-- A clear error when another tgmcp process holds the TDLib database lock.
+## [0.1.0] - 2026-10-31
 
-### Fixed
-- Outgoing events (`events.includeOutgoing`) now carry the final message id: messages still being
-  sent are skipped and emitted on `updateMessageSendSucceeded`; failed sends emit nothing.
-- Empty JSON arrays (`"deny": []`, `"chats": []`, empty `features`/`topics`) are accepted as "no entries"
-  instead of making the config invalid.
+First public release: a policy-gated MCP server (stdio) for a Telegram **user** account, built on TDLib and
+.NET 11, shipped as a hardened Docker image.
 
-### Changed
-- **The policy is now a JSON file** (`TGMCP_ConfigFile`, default `/config/tgmcp.json`; comments and
-  trailing commas allowed) with camelCase keys, lists as JSON arrays and optional `name`/`note` labels
-  on rules. `TGMCP_*` environment variables still work and override the file
-  (defaults < file < env). Secrets (`ApiId`, `ApiHash`, `DatabaseKey`) are environment-only and make
-  the config invalid if found in the file. An explicitly configured but missing file denies everything.
-- Validation errors name keys by JSON path (`chats[2].reed: unknown key`) or by variable name for env.
-- Denial hints are ready-to-paste JSON snippets instead of env keys.
-- `config check [file]` validates a given file and shows the source (file/env/default) of every
-  setting and the human names of rules.
-- `tgmcp.example.jsonc` replaces the env-based policy template; `tgmcp.env.example` now holds only
-  secrets and optional overrides (`api.env.example` removed).
-- An empty `topics` list now means "all topics" instead of being an error.
-- Audit log failures now fail closed: calls are denied before contacting Telegram if the audit file
-  is not writable, and results are withheld if the audit record cannot be written afterwards.
-- Permission denials name the chat and include a one-line config hint for the operator; Deny-rule
-  hits return only "denied by policy".
+### Policy and configuration
+- JSON policy file (`TGMCP_ConfigFile`, default `/config/tgmcp.json`) with comments and trailing commas,
+  camelCase keys, optional `name`/`note` labels; `TGMCP_*` environment variables override it
+  (defaults < file < env). Commented template `tgmcp.example.jsonc`.
+- Deny by default: master switch `enabled`, global `features.*` switches **and** per-chat grants
+  (`read`, `write` off/draft/on, `features`, `sinceDays`, `topics`, `notify`); first matching chat rule
+  wins, otherwise `defaults`; `deny` rules by id, username, type or chat folder always win and are opaque.
+- Fail closed: unknown keys (reported by JSON path), bad types or values, ambiguous selectors, secrets or
+  runtime settings in the file, a missing explicit file, unresolvable folder denies or an unwritable audit
+  log deny everything. Empty arrays are valid.
+- Secrets (`ApiId`, `ApiHash`, `DatabaseKey`) and `TGMCP_ContactsAllow` are environment-only.
+- `tgmcp config check [file]`: effective policy, the source of every value, rule names, redacted
+  sensitive values; never contacts Telegram.
+- Actionable denials with ready-to-paste JSON rule snippets.
+- Limits: `maxMessagesPerCall`, `ratePerMinute` (token bucket), `maxMediaMb`, `mediaRetentionDays`,
+  `sendsPerMinute` (per chat), `joinsPerHour`, `newChatsPerDay`, `listChats` modes.
 
-### Added
-- `media.dir` (default `/data/media`) to bind-mount a host folder for downloads, and
-  `media.hostDir` to report the matching host path in `download_media` results.
-- `limits.mediaRetentionDays` (default 7, 0 disables): old media is deleted at startup and
-  before each download.
+### Tools (17 MCP tools)
+- Read: `list_chats`, `read_messages`, `read_topic`, `get_message`, `search_chat`, `search_all`
+  (results from non-allowed chats dropped), `download_media` (size cap, retention, optional host path),
+  `summarize_message` / `translate_message` (Telegram's AI features, usually Premium), `preview_chat`.
+- Write, as the owner, with a `"draft"` mode for owner approval (except `mark_read`, which acts at once):
+  `send_message` (also to allow-listed phone numbers via `contacts.mode`), `react` (offered non-Premium
+  emoji only), `forward_message` (source needs read + forward, destination a write mode),
+  `edit_message` / `delete_message` (only messages TgMcp sent, tracked in a sent-log; deletions are drafts
+  unless `delete.mode` is `"on"`), `join_chat` (`join.mode` off/draft/on with an allow list),
+  `mark_read`.
+- Owner CLI: `login` (interactive, session shown as "TgMcp"), `drafts`, `approve <id>`, `reject <id>`
+  for message, reaction, forward, edit, delete, join and phone-message drafts; clear error when another
+  process holds the TDLib database.
 
-## [0.1.0] - 2026-10-30
+### Inbound events
+- With `events.enabled`, new messages from chats with `"notify": true` (requires `read`) are pushed to
+  Claude Code as `notifications/claude/channel` (experimental `claude/channel` capability): untrusted-data
+  marker, truncation, media descriptions, string meta incl. `write_mode`, rate limit with drop summaries,
+  optional catch-up, final ids for outgoing messages. Server instructions describe the untrusted-data rules.
 
-### Added
-- MCP stdio server (`serve`) with read-only tools: `list_chats`, `read_messages`, `read_topic`,
-  `get_message`, `search_chat`, `search_all`, `download_media`.
-- Env-only policy (`TGMCP_*`): master switch, global feature switches, defaults, ordered chat rules
-  (id/username/title, read, write, features, since-days, topics), deny rules (id/username/type/folder),
-  limits. Strict validation; invalid config denies everything.
-- `config check` command showing the effective policy per rule.
-- Interactive `login` command (phone, code, 2FA password without echo); session named "TgMcp".
-- JSONL audit log without message content; config sha256 at startup.
-- Token-bucket rate limit and bounded FLOOD_WAIT retry.
-- Hardened Docker image (non-root, read-only friendly).
+### Security and operations
+- JSONL audit log without message text, titles, queries, invite hashes or phone numbers (hash prefixes
+  only); config sha256 at start; fails closed.
+- Bounded FLOOD_WAIT retry honoring Telegram's wait, per-request timeouts.
+- Non-root image (uid 1654) that works with `--read-only --cap-drop ALL --security-opt no-new-privileges`.
+- Release workflow: signed (cosign keyless) multi-arch images (linux/amd64, linux/arm64) on GHCR with SBOM
+  and provenance.
+- Opt-in integration tests against Telegram's test DC (`tests/TgMcp.IntegrationTests`, manual workflow).
+- CI, Dependabot, issue forms, PR template, code of conduct, contributing guide, wiki.
+
+[Unreleased]: https://github.com/Abdukhalil-zoda/tg-mcp/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Abdukhalil-zoda/tg-mcp/releases/tag/v0.1.0
