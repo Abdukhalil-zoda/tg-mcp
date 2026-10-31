@@ -213,6 +213,33 @@ public sealed class TdTelegramClient : ITelegramClient, IInboundMessageSource, I
             : $"TDLib could not open its database: {tdError}";
 
     /// <inheritdoc />
+    public async Task<long?> MarkReadAsync(long chatId, long? upToMessageId, CancellationToken ct)
+    {
+        var upTo = upToMessageId;
+        if (upTo is null)
+        {
+            var chat = await S.CallAsync(new GetChat { ChatId = chatId }, ct).ConfigureAwait(false);
+            upTo = chat.LastMessage?.Id;
+        }
+        if (upTo is long id)
+        {
+            await S.CallAsync(new ViewMessages
+            {
+                ChatId = chatId,
+                MessageIds = [id],
+                Source = new MessageSource.MessageSourceChatHistory(),
+                ForceRead = true,
+            }, ct).ConfigureAwait(false);
+        }
+        if (upToMessageId is null)
+        {
+            await S.CallAsync(new ReadAllChatMentions { ChatId = chatId }, ct).ConfigureAwait(false);
+            await S.CallAsync(new ReadAllChatReactions { ChatId = chatId }, ct).ConfigureAwait(false);
+        }
+        return upTo;
+    }
+
+    /// <inheritdoc />
     public async Task<TgChatPreview> PreviewJoinAsync(JoinTarget target, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(target);

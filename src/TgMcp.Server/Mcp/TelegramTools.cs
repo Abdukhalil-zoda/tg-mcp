@@ -25,12 +25,14 @@ public sealed class TelegramTools
     private readonly SendMessageTool _send;
     private readonly JoinChatTool _join;
     private readonly PreviewChatTool _preview;
+    private readonly MarkReadTool _markRead;
 
     /// <summary>Created per call by the MCP host.</summary>
     public TelegramTools(ListChatsTool list, ReadMessagesTool read, ReadTopicTool topic, GetMessageTool get,
         SearchChatTool searchChat, SearchAllTool searchAll, DownloadMediaTool download, SendMessageTool send,
-        JoinChatTool join, PreviewChatTool preview)
+        JoinChatTool join, PreviewChatTool preview, MarkReadTool markRead)
     {
+        _markRead = markRead;
         _join = join;
         _preview = preview;
         _send = send;
@@ -142,6 +144,16 @@ public sealed class TelegramTools
         [Description("@username, t.me/username, https://t.me/+HASH or t.me/joinchat/HASH.")] string target,
         CancellationToken cancellationToken = default) =>
         Map(await _join.RunAsync(target, cancellationToken).ConfigureAwait(false));
+
+    /// <summary>mark_read.</summary>
+    [McpServerTool(Name = "mark_read", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Mark a chat as read AS THE OWNER: this clears unread counters on all the owner's devices and senders see read receipts. " +
+        "Without up_to_message_id everything is marked read, including mentions and reactions.")]
+    public async Task<CallToolResult> MarkRead(
+        [Description("Chat id (e.g. -1001234567890) or @username.")] string chat,
+        [Description("Mark messages up to and including this id as read (0 = everything).")] long up_to_message_id = 0,
+        CancellationToken cancellationToken = default) =>
+        Map(await _markRead.RunAsync(chat, up_to_message_id, cancellationToken).ConfigureAwait(false));
 
     private static CallToolResult Map(ToolResult r) => new()
     {

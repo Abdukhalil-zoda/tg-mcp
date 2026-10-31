@@ -83,6 +83,7 @@ public static class Composition
         services.AddSingleton<IJoinLimiter>(sp => new JoinRateLimiter(sp.GetRequiredService<IPolicy>().Config.JoinsPerHour, sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<JoinChatTool>();
         services.AddSingleton<PreviewChatTool>();
+        services.AddSingleton<MarkReadTool>();
         services.AddSingleton<DraftCommands>();
         services.AddSingleton<IInboundMessageSource>(sp => sp.GetRequiredService<TdTelegramClient>());
         services.AddSingleton<IEventStateStore, FileEventStateStore>();

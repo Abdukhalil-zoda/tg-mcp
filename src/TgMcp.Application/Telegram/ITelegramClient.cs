@@ -160,6 +160,12 @@ public interface ITelegramClient
     /// </summary>
     Task<TgSent> SendMessageAsync(OutgoingMessage message, CancellationToken ct);
 
+    /// <summary>
+    /// Marks the chat as read up to <paramref name="upToMessageId"/> (viewMessages with force_read), or up to the
+    /// last message when null, in which case mentions and reactions are cleared too. Returns the id marked, or null if the chat is empty.
+    /// </summary>
+    Task<long?> MarkReadAsync(long chatId, long? upToMessageId, CancellationToken ct);
+
     /// <summary>Resolves a join target without joining (searchPublicChat / checkChatInviteLink).</summary>
     Task<TgChatPreview> PreviewJoinAsync(JoinTarget target, CancellationToken ct);
 

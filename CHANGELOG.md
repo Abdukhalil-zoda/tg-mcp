@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `mark_read(chat, up_to_message_id?)`: marks a chat read as the owner (`viewMessages` with force_read;
+  without an id also `readAllChatMentions`/`readAllChatReactions`). Needs `features.markRead` and
+  `read` + `"mark_read"` in the chat rule; refused for topic-restricted rules. Changes the owner's
+  visible unread state and read receipts.
 - `join_chat` and `preview_chat`: join (or preview) a group/channel by `@username`, `t.me/username` or an
   invite link. Gated by `features.join` and the new `join` section: `"mode": "off"` (default) | `"draft"`
   (owner approves with `tgmcp approve`) | `"on"` (only targets in `join.allow`; `"*"` allowed but flagged).

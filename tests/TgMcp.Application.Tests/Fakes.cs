@@ -107,6 +107,16 @@ internal sealed class FakeTelegram : ITelegramClient
         return Task.FromResult(new TgSent(message.ChatId, 1000 + Sent.Count, Harness.Now));
     }
 
+    public List<(long Chat, long? UpTo)> MarkedRead { get; } = [];
+
+    public Task<long?> MarkReadAsync(long chatId, long? upToMessageId, CancellationToken ct)
+    {
+        Calls++;
+        var upTo = upToMessageId ?? Messages.GetValueOrDefault(chatId, []).Select(m => (long?)m.Id).FirstOrDefault();
+        MarkedRead.Add((chatId, upToMessageId));
+        return Task.FromResult(upTo);
+    }
+
     public Dictionary<string, TgChatPreview> Previews { get; } = [];
     public List<JoinTarget> Joins { get; } = [];
     public string JoinStatus { get; set; } = "joined";
@@ -252,6 +262,7 @@ internal sealed class Harness
     private IJoinLimiter? _joinLimiter;
     public JoinChatTool Join => new(Context, DraftStore, _joinLimiter ??= new JoinRateLimiter(Policy.Config.JoinsPerHour, Time));
     public PreviewChatTool Preview => new(Context);
+    public MarkReadTool MarkRead => new(Context);
     public FakeNotifier Notifier { get; } = new();
     public MemoryEventState EventState { get; } = new();
     private InboundEventProcessor? _events;
