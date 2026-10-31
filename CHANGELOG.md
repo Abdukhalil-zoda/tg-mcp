@@ -27,6 +27,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
 - A clear error when another tgmcp process holds the TDLib database lock.
 
 ### Fixed
+- Outgoing events (`events.includeOutgoing`) now carry the final message id: messages still being
+  sent are skipped and emitted on `updateMessageSendSucceeded`; failed sends emit nothing.
 - Empty JSON arrays (`"deny": []`, `"chats": []`, empty `features`/`topics`) are accepted as "no entries"
   instead of making the config invalid.
 

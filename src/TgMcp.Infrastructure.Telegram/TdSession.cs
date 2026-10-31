@@ -70,13 +70,11 @@ public sealed partial class TdSession : IAsyncDisposable
 
     private void OnUpdate(object? sender, Update u)
     {
+        if (InboundRouter.ForEvents(u) is { } inbound) _newMessages.Writer.TryWrite(inbound);
         switch (u)
         {
             case Update.UpdateAuthorizationState a:
                 SetState(a.AuthorizationState);
-                break;
-            case Update.UpdateNewMessage nm when nm.Message is not null:
-                _newMessages.Writer.TryWrite(nm.Message);
                 break;
             case Update.UpdateMessageSendSucceeded ok:
                 Pending(ok.Message.ChatId, ok.OldMessageId).TrySetResult(ok.Message);

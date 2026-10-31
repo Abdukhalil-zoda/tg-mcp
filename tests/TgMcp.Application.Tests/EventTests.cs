@@ -78,6 +78,19 @@ public class EventTests
     }
 
     [Fact]
+    public async Task Outgoing_event_carries_the_final_id_and_dedupes_by_it()
+    {
+        var h = H([.. FriendNotify, ("Events__IncludeOutgoing", "true")]);
+        // The adapter only forwards the final message (updateMessageSendSucceeded), never the temporary one.
+        Assert.Equal(EventOutcome.Emitted, await h.Events.HandleAsync(In(111, 4242, fromMe: true), false, Ct));
+        var meta = Assert.Single(h.Notifier.Events).Meta;
+        Assert.Equal("4242", meta["message_id"]);
+        Assert.Equal("true", meta["from_me"]);
+        Assert.Equal(4242, h.EventState.Saved[111]);
+        Assert.Equal(EventOutcome.Emitted, await h.Events.HandleAsync(In(111, 4243), false, Ct));
+    }
+
+    [Fact]
     public async Task Global_read_switch_off_blocks_events()
     {
         var h = new Harness(("Enabled", "true"), ("Events__Enabled", "true"), ("Chats__0__Id", "111"), ("Chats__0__Read", "true"), ("Chats__0__Notify", "true"));

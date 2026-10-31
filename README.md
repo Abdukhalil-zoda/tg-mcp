@@ -85,7 +85,7 @@ Events arrive as `<channel source="tg" chat_id="..." message_id="..." ...>` bloc
 **When an event is emitted.** All of these must hold:
 
 1. `events.enabled` is true.
-2. The message is incoming, or `events.includeOutgoing` is true.
+2. The message is incoming, or `events.includeOutgoing` is true. Your own messages sent through TgMcp are emitted once Telegram confirms them, with the final message id; failed sends emit nothing.
 3. The chat is not hit by a deny rule.
 4. Read is allowed: `features.read` and the rule's `read`.
 5. The effective rule has `"notify": true`. `notify` requires `read`, otherwise the config is invalid.
