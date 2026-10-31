@@ -28,12 +28,17 @@ public sealed class TelegramTools
     private readonly MarkReadTool _markRead;
     private readonly ReactTool _react;
     private readonly ForwardTool _forward;
+    private readonly EditMessageTool _edit;
+    private readonly DeleteMessageTool _delete;
 
     /// <summary>Created per call by the MCP host.</summary>
     public TelegramTools(ListChatsTool list, ReadMessagesTool read, ReadTopicTool topic, GetMessageTool get,
         SearchChatTool searchChat, SearchAllTool searchAll, DownloadMediaTool download, SendMessageTool send,
-        JoinChatTool join, PreviewChatTool preview, MarkReadTool markRead, ReactTool react, ForwardTool forward)
+        JoinChatTool join, PreviewChatTool preview, MarkReadTool markRead, ReactTool react, ForwardTool forward,
+        EditMessageTool edit, DeleteMessageTool delete)
     {
+        _edit = edit;
+        _delete = delete;
         _forward = forward;
         _react = react;
         _markRead = markRead;
@@ -182,6 +187,28 @@ public sealed class TelegramTools
         [Description("Send copies without the 'forwarded from' header.")] bool send_copy = false,
         CancellationToken cancellationToken = default) =>
         Map(await _forward.RunAsync(from_chat, message_ids, to_chat, to_topic_id, send_copy, cancellationToken).ConfigureAwait(false));
+
+    /// <summary>edit_message.</summary>
+    [McpServerTool(Name = "edit_message", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true)]
+    [Description("Replace the text of a message that this server sent earlier, AS THE OWNER (shown as edited). Other messages are refused. " +
+        "Depending on the owner's policy it is edited at once or saved as a draft the owner approves.")]
+    public async Task<CallToolResult> EditMessage(
+        [Description("Chat id or @username.")] string chat,
+        [Description("Id of a message this server sent.")] long message_id,
+        [Description("New plain text, 1-4096 characters.")] string text,
+        CancellationToken cancellationToken = default) =>
+        Map(await _edit.RunAsync(chat, message_id, text, cancellationToken).ConfigureAwait(false));
+
+    /// <summary>delete_message.</summary>
+    [McpServerTool(Name = "delete_message", ReadOnly = false, Destructive = true, Idempotent = false, OpenWorld = true)]
+    [Description("Delete messages that this server sent earlier (other messages are refused). By default this only saves a draft that the owner must approve. " +
+        "for_everyone=true deletes them for all participants, not just the owner.")]
+    public async Task<CallToolResult> DeleteMessage(
+        [Description("Chat id or @username.")] string chat,
+        [Description("Ids of messages this server sent (1-20).")] long[] message_ids,
+        [Description("Delete for all participants (revoke), not only for the owner.")] bool for_everyone = false,
+        CancellationToken cancellationToken = default) =>
+        Map(await _delete.RunAsync(chat, message_ids, for_everyone, cancellationToken).ConfigureAwait(false));
 
     private static CallToolResult Map(ToolResult r) => new()
     {

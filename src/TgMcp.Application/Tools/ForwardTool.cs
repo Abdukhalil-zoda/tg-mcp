@@ -57,7 +57,7 @@ public sealed class ForwardTool
                 };
                 return ToolOutcome.Ok(payload, target.Id, ids.Count, gate.Target, $"forward draft {draft.Id} saved, {ids.Count} message(s) from {source.Id}");
             }
-            var done = await ForwardGate.ApplyAsync(_c.Telegram, forward, token).ConfigureAwait(false);
+            var done = await ForwardGate.ApplyAsync(_c.Telegram, _c.SentLog, forward, token).ConfigureAwait(false);
             return ToolOutcome.Ok(done, target.Id, ids.Count, gate.Target, $"forwarded {ids.Count} message(s) from {source.Id}");
         }, ct);
 }
@@ -97,10 +97,11 @@ internal static class ForwardGate
         return new Gate(null, ds, dt);
     }
 
-    /// <summary>Forwards the messages.</summary>
-    public static async Task<object> ApplyAsync(ITelegramClient telegram, PendingForward f, CancellationToken ct)
+    /// <summary>Forwards the messages and records them in the sent-log.</summary>
+    public static async Task<object> ApplyAsync(ITelegramClient telegram, ISentLog sent, PendingForward f, CancellationToken ct)
     {
         var ids = await telegram.ForwardMessagesAsync(f.FromChatId, f.MessageIds, f.ToChatId, f.ToTopicId, f.SendCopy, ct).ConfigureAwait(false);
+        foreach (var id in ids) await sent.RecordAsync(f.ToChatId, id, ct).ConfigureAwait(false);
         return new { status = "forwarded", from_chat = f.FromChatId, to_chat = f.ToChatId, message_ids = ids };
     }
 }

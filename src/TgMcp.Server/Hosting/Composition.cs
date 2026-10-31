@@ -86,6 +86,9 @@ public static class Composition
         services.AddSingleton<MarkReadTool>();
         services.AddSingleton<ReactTool>();
         services.AddSingleton<ForwardTool>();
+        services.AddSingleton<ISentLog, FileSentLog>();
+        services.AddSingleton<EditMessageTool>();
+        services.AddSingleton<DeleteMessageTool>();
         services.AddSingleton<DraftCommands>();
         services.AddSingleton<IInboundMessageSource>(sp => sp.GetRequiredService<TdTelegramClient>());
         services.AddSingleton<IEventStateStore, FileEventStateStore>();

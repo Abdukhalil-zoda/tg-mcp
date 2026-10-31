@@ -9,7 +9,8 @@ namespace TgMcp.Application.Tools;
 /// <param name="Chats">Chat argument resolver.</param>
 /// <param name="Telegram">Telegram port.</param>
 /// <param name="Time">Clock.</param>
-public sealed record ToolContext(ToolRunner Runner, IPolicy Policy, ChatResolver Chats, ITelegramClient Telegram, TimeProvider Time)
+/// <param name="SentLog">Messages this server sent (for edit/delete).</param>
+public sealed record ToolContext(ToolRunner Runner, IPolicy Policy, ChatResolver Chats, ITelegramClient Telegram, TimeProvider Time, ISentLog SentLog)
 {
     /// <summary>Clamps a requested count to [1, limits.maxMessagesPerCall].</summary>
     public int ClampLimit(int requested) => Math.Clamp(requested, 1, Policy.Config.MaxMessagesPerCall);

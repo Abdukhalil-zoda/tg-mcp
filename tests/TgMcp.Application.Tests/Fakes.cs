@@ -130,15 +130,34 @@ internal sealed class FakeTelegram : ITelegramClient
         return Task.CompletedTask;
     }
 
+    public List<(long Chat, long Message, string Text)> Edits { get; } = [];
+    public List<(long Chat, long[] Ids, bool ForEveryone)> Deletes { get; } = [];
+
+    public Task EditMessageTextAsync(long chatId, long messageId, string text, CancellationToken ct)
+    {
+        Calls++;
+        Edits.Add((chatId, messageId, text));
+        return Task.CompletedTask;
+    }
+
+    public Task DeleteMessagesAsync(long chatId, IReadOnlyList<long> messageIds, bool forEveryone, CancellationToken ct)
+    {
+        Calls++;
+        Deletes.Add((chatId, [.. messageIds], forEveryone));
+        return Task.CompletedTask;
+    }
+
     public HashSet<(long Chat, long Message)> Protected { get; } = [];
+    public HashSet<(long Chat, long Message)> NotEditable { get; } = [];
+    public HashSet<(long Chat, long Message)> NotRevocable { get; } = [];
     public List<(long From, long[] Ids, long To, int? Topic, bool Copy)> Forwards { get; } = [];
     private long _nextForwardId = 9000;
 
     public Task<TgMessageProperties> GetMessagePropertiesAsync(long chatId, long messageId, CancellationToken ct)
     {
         Calls++;
-        var own = Messages.GetValueOrDefault(chatId, []).FirstOrDefault(m => m.Id == messageId)?.FromMe == true;
-        return Task.FromResult(new TgMessageProperties(!Protected.Contains((chatId, messageId)), own, own, true));
+        var key = (chatId, messageId);
+        return Task.FromResult(new TgMessageProperties(!Protected.Contains(key), !NotEditable.Contains(key), !NotRevocable.Contains(key), true));
     }
 
     public Task<IReadOnlyList<long>> ForwardMessagesAsync(long fromChatId, IReadOnlyList<long> messageIds, long toChatId, int? toTopicId, bool sendCopy, CancellationToken ct)
@@ -240,6 +259,20 @@ internal sealed class MemoryDraftStore : IDraftStore
         return Task.FromResult(d);
     }
 
+    public Task<Draft> SaveEditAsync(string chatTitle, PendingEdit edit, CancellationToken ct)
+    {
+        var d = new Draft($"{++_next:x8}", Harness.Now, chatTitle, null, Draft.EditKind, Edit: edit);
+        Drafts[d.Id] = d;
+        return Task.FromResult(d);
+    }
+
+    public Task<Draft> SaveDeleteAsync(string chatTitle, PendingDelete delete, CancellationToken ct)
+    {
+        var d = new Draft($"{++_next:x8}", Harness.Now, chatTitle, null, Draft.DeleteKind, Delete: delete);
+        Drafts[d.Id] = d;
+        return Task.FromResult(d);
+    }
+
     public Task<Draft> SaveForwardAsync(string chatTitle, PendingForward forward, CancellationToken ct)
     {
         var d = new Draft($"{++_next:x8}", Harness.Now, chatTitle, null, Draft.ForwardKind, Forward: forward);
@@ -283,6 +316,25 @@ internal sealed class MemoryEventState : IEventStateStore
     }
 }
 
+internal sealed class MemorySentLog : ISentLog
+{
+    public HashSet<(long Chat, long Message)> Entries { get; } = [];
+
+    public Task RecordAsync(long chatId, long messageId, CancellationToken ct)
+    {
+        Entries.Add((chatId, messageId));
+        return Task.CompletedTask;
+    }
+
+    public Task<bool> ContainsAsync(long chatId, long messageId, CancellationToken ct) => Task.FromResult(Entries.Contains((chatId, messageId)));
+
+    public Task RemoveAsync(long chatId, IReadOnlyCollection<long> messageIds, CancellationToken ct)
+    {
+        foreach (var id in messageIds) Entries.Remove((chatId, id));
+        return Task.CompletedTask;
+    }
+}
+
 /// <summary>Wires the real use cases to fakes.</summary>
 internal sealed class Harness
 {
@@ -290,6 +342,7 @@ internal sealed class Harness
 
     public FakeTelegram Telegram { get; } = new();
     public MemoryAudit Audit { get; } = new();
+    public MemorySentLog SentLog { get; } = new();
     public FakeTimeProvider Time { get; } = new(Now);
     public PolicyEngine Policy { get; }
     public ToolContext Context { get; }
@@ -300,7 +353,7 @@ internal sealed class Harness
         var folders = new FolderGuard(Policy, Telegram, Time, NullLogger<FolderGuard>.Instance);
         var runner = new ToolRunner(Policy, Telegram, new TokenBucket(Policy.Config.RatePerMinute, Time), Audit, folders, Time,
             NullLogger<ToolRunner>.Instance);
-        Context = new ToolContext(runner, Policy, new ChatResolver(Telegram), Telegram, Time);
+        Context = new ToolContext(runner, Policy, new ChatResolver(Telegram), Telegram, Time, SentLog);
     }
 
     public ListChatsTool ListChats => new(Context);
@@ -318,6 +371,8 @@ internal sealed class Harness
     public JoinChatTool Join => new(Context, DraftStore, _joinLimiter ??= new JoinRateLimiter(Policy.Config.JoinsPerHour, Time));
     public PreviewChatTool Preview => new(Context);
     public MarkReadTool MarkRead => new(Context);
+    public EditMessageTool Edit => new(Context, DraftStore);
+    public DeleteMessageTool Delete => new(Context, DraftStore);
     public ForwardTool Forward => new(Context, DraftStore, _sendLimiter ??= new PerChatRateLimiter(Policy.Config.SendsPerMinute, Time));
     public ReactTool React => new(Context, DraftStore, _sendLimiter ??= new PerChatRateLimiter(Policy.Config.SendsPerMinute, Time));
     public FakeNotifier Notifier { get; } = new();
@@ -329,6 +384,6 @@ internal sealed class Harness
 
     public AuditEntry LastAudit => Audit.Entries[^1];
 
-    public static TgMessage Msg(long chat, long id, string text, double daysAgo = 0, int? topic = null, TgMedia? media = null) =>
-        new(chat, id, Now.AddDays(-daysAgo), "Alice", false, text, media, topic);
+    public static TgMessage Msg(long chat, long id, string text, double daysAgo = 0, int? topic = null, TgMedia? media = null, bool fromMe = false) =>
+        new(chat, id, Now.AddDays(-daysAgo), "Alice", fromMe, text, media, topic);
 }

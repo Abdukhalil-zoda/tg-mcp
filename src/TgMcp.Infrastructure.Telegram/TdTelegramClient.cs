@@ -275,6 +275,27 @@ public sealed class TdTelegramClient : ITelegramClient, IInboundMessageSource, I
     }
 
     /// <inheritdoc />
+    public Task EditMessageTextAsync(long chatId, long messageId, string text, CancellationToken ct) =>
+        S.CallAsync(new EditMessageText
+        {
+            ChatId = chatId,
+            MessageId = messageId,
+            InputMessageContent = new InputMessageContent.InputMessageText
+            {
+                Text = new FormattedText { Text = text, Entities = [] },
+                LinkPreviewOptions = new LinkPreviewOptions { IsDisabled = true },
+                ClearDraft = false,
+            },
+        }, ct);
+
+    /// <inheritdoc />
+    public Task DeleteMessagesAsync(long chatId, IReadOnlyList<long> messageIds, bool forEveryone, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(messageIds);
+        return S.CallAsync(new DeleteMessages { ChatId = chatId, MessageIds = [.. messageIds], Revoke = forEveryone }, ct);
+    }
+
+    /// <inheritdoc />
     public async Task<long?> MarkReadAsync(long chatId, long? upToMessageId, CancellationToken ct)
     {
         var upTo = upToMessageId;

@@ -15,9 +15,18 @@ namespace TgMcp.Application.Drafts;
 /// <param name="Join">The join to perform (kind "join").</param>
 /// <param name="Reaction">The reaction to set or remove (kind "reaction").</param>
 /// <param name="Forward">The forward to perform (kind "forward").</param>
+/// <param name="Edit">The edit to perform (kind "edit").</param>
+/// <param name="Delete">The deletion to perform (kind "delete").</param>
 public sealed record Draft(string Id, DateTimeOffset CreatedUtc, string ChatTitle, OutgoingMessage? Message,
-    string Kind = Draft.MessageKind, PendingJoin? Join = null, PendingReaction? Reaction = null, PendingForward? Forward = null)
+    string Kind = Draft.MessageKind, PendingJoin? Join = null, PendingReaction? Reaction = null, PendingForward? Forward = null,
+    PendingEdit? Edit = null, PendingDelete? Delete = null)
 {
+    /// <summary>Kind of an edit draft.</summary>
+    public const string EditKind = "edit";
+
+    /// <summary>Kind of a delete draft.</summary>
+    public const string DeleteKind = "delete";
+
     /// <summary>Kind of a forward draft.</summary>
     public const string ForwardKind = "forward";
 
@@ -30,6 +39,18 @@ public sealed record Draft(string Id, DateTimeOffset CreatedUtc, string ChatTitl
     /// <summary>Kind of a join draft.</summary>
     public const string JoinKind = "join";
 }
+
+/// <summary>An edit waiting for the owner's approval.</summary>
+/// <param name="ChatId">Chat id.</param>
+/// <param name="MessageId">Own message to edit.</param>
+/// <param name="Text">New plain text.</param>
+public sealed record PendingEdit(long ChatId, long MessageId, string Text);
+
+/// <summary>A deletion waiting for the owner's approval.</summary>
+/// <param name="ChatId">Chat id.</param>
+/// <param name="MessageIds">Own messages to delete.</param>
+/// <param name="ForEveryone">Delete for all users (revoke).</param>
+public sealed record PendingDelete(long ChatId, IReadOnlyList<long> MessageIds, bool ForEveryone);
 
 /// <summary>A forward waiting for the owner's approval.</summary>
 /// <param name="FromChatId">Source chat.</param>
@@ -65,6 +86,12 @@ public interface IDraftStore
 
     /// <summary>Saves a new join draft.</summary>
     Task<Draft> SaveJoinAsync(string chatTitle, PendingJoin join, CancellationToken ct);
+
+    /// <summary>Saves a new edit draft.</summary>
+    Task<Draft> SaveEditAsync(string chatTitle, PendingEdit edit, CancellationToken ct);
+
+    /// <summary>Saves a new delete draft.</summary>
+    Task<Draft> SaveDeleteAsync(string chatTitle, PendingDelete delete, CancellationToken ct);
 
     /// <summary>Saves a new forward draft.</summary>
     Task<Draft> SaveForwardAsync(string chatTitle, PendingForward forward, CancellationToken ct);

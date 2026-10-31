@@ -34,6 +34,14 @@ public sealed class FileDraftStore : IDraftStore
         WriteAsync(new Draft(NewId(), _time.GetUtcNow(), chatTitle, null, Draft.JoinKind, join), ct);
 
     /// <inheritdoc />
+    public Task<Draft> SaveEditAsync(string chatTitle, PendingEdit edit, CancellationToken ct) =>
+        WriteAsync(new Draft(NewId(), _time.GetUtcNow(), chatTitle, null, Draft.EditKind, Edit: edit), ct);
+
+    /// <inheritdoc />
+    public Task<Draft> SaveDeleteAsync(string chatTitle, PendingDelete delete, CancellationToken ct) =>
+        WriteAsync(new Draft(NewId(), _time.GetUtcNow(), chatTitle, null, Draft.DeleteKind, Delete: delete), ct);
+
+    /// <inheritdoc />
     public Task<Draft> SaveForwardAsync(string chatTitle, PendingForward forward, CancellationToken ct) =>
         WriteAsync(new Draft(NewId(), _time.GetUtcNow(), chatTitle, null, Draft.ForwardKind, Forward: forward), ct);
 

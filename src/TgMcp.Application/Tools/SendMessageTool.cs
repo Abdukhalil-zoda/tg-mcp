@@ -55,6 +55,7 @@ public sealed class SendMessageTool
             }
 
             var sent = await _c.Telegram.SendMessageAsync(message, token).ConfigureAwait(false);
+            await _c.SentLog.RecordAsync(sent.ChatId, sent.MessageId, token).ConfigureAwait(false);
             return ToolOutcome.Ok(Sent(sent), target.Id, 1, d, $"sent, length {text.Length}");
         }, ct);
 

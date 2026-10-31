@@ -204,6 +204,12 @@ public interface ITelegramClient
     /// </summary>
     Task<IReadOnlyList<long>> ForwardMessagesAsync(long fromChatId, IReadOnlyList<long> messageIds, long toChatId, int? toTopicId, bool sendCopy, CancellationToken ct);
 
+    /// <summary>Replaces the text of a message (editMessageText, plain text, link previews off).</summary>
+    Task EditMessageTextAsync(long chatId, long messageId, string text, CancellationToken ct);
+
+    /// <summary>Deletes messages (deleteMessages); <paramref name="forEveryone"/> = revoke for all users.</summary>
+    Task DeleteMessagesAsync(long chatId, IReadOnlyList<long> messageIds, bool forEveryone, CancellationToken ct);
+
     /// <summary>Chat folder title to the ids of the chats currently in that folder.</summary>
     Task<IReadOnlyDictionary<string, IReadOnlySet<long>>> GetFolderChatsAsync(CancellationToken ct);
 }

@@ -6,6 +6,11 @@ and the project uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `edit_message` and `delete_message`: edit or delete messages that TgMcp itself sent (tracked in
+  `/data/sent-log.json`, ids only). Need `features.editOwn` / `features.deleteOwn` + `features.send` and
+  `"edit_own"` / `"delete_own"` + a `write` mode in the chat rule. Edits follow the write mode; deletions
+  are always drafts unless `"write": "on"` and the new `"delete": { "mode": "on" }`. `for_everyone` must be
+  set explicitly to revoke for all participants.
 - `forward_message(from_chat, message_ids, to_chat, to_topic_id?, send_copy?)`: forwards up to 20 messages as
   the owner. Source needs `read` + `"forward"` (`features.forward`) and each message must pass
   `sinceDays`/`topics` and be forwardable; destination needs a `write` mode (`"on"` forwards, `"draft"`

@@ -56,6 +56,7 @@ public static class ConfigReport
         yield return ("limits:sendsPerMinute", "limits.sendsPerMinute", c.SendsPerMinute.ToString(CultureInfo.InvariantCulture));
         yield return ("limits:maxMediaMb", "limits.maxMediaMb", c.MaxMediaMb.ToString(CultureInfo.InvariantCulture));
         yield return ("limits:mediaRetentionDays", "limits.mediaRetentionDays", c.MediaRetentionDays == 0 ? "0 (keep forever)" : c.MediaRetentionDays.ToString(CultureInfo.InvariantCulture));
+        yield return ("delete:mode", "delete.mode", Names.Snake(c.DeleteMode));
         yield return ("join:mode", "join.mode", Names.Snake(c.JoinMode));
         yield return ("join:allow", "join.allow", c.JoinAllow.Count == 0 ? "[]" : "[" + string.Join(", ", c.JoinAllow) + "]"
             + (c.JoinAllow.Any(a => a.Any) ? " (WARNING: \"*\" allows joining anything)" : ""));

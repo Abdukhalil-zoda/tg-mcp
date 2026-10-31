@@ -29,6 +29,18 @@ public static class DraftCommandsCli
                             output.WriteLine($"{d.Id}  {d.CreatedUtc.UtcDateTime:yyyy-MM-dd HH:mm}Z  JOIN {what} \"{d.ChatTitle}\" ({j.Type}, {j.MemberCount} members)");
                             continue;
                         }
+                        if (d.Kind == Draft.EditKind && d.Edit is { } ed)
+                        {
+                            var text = ed.Text.ReplaceLineEndings(" ");
+                            if (text.Length > 80) text = text[..80] + "...";
+                            output.WriteLine($"{d.Id}  {d.CreatedUtc.UtcDateTime:yyyy-MM-dd HH:mm}Z  EDIT message {ed.MessageId} in chat {ed.ChatId} \"{d.ChatTitle}\"  {text}");
+                            continue;
+                        }
+                        if (d.Kind == Draft.DeleteKind && d.Delete is { } del)
+                        {
+                            output.WriteLine($"{d.Id}  {d.CreatedUtc.UtcDateTime:yyyy-MM-dd HH:mm}Z  DELETE {del.MessageIds.Count} message(s) in chat {del.ChatId} \"{d.ChatTitle}\"{(del.ForEveryone ? " FOR EVERYONE" : " (only for you)")}");
+                            continue;
+                        }
                         if (d.Kind == Draft.ForwardKind && d.Forward is { } f)
                         {
                             output.WriteLine($"{d.Id}  {d.CreatedUtc.UtcDateTime:yyyy-MM-dd HH:mm}Z  FORWARD {f.MessageIds.Count} message(s) from chat {f.FromChatId} to chat {f.ToChatId} \"{d.ChatTitle}\"{(f.SendCopy ? " (as copy)" : "")}");
