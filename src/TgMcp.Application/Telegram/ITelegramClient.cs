@@ -210,6 +210,12 @@ public interface ITelegramClient
     /// <summary>Deletes messages (deleteMessages); <paramref name="forEveryone"/> = revoke for all users.</summary>
     Task DeleteMessagesAsync(long chatId, IReadOnlyList<long> messageIds, bool forEveryone, CancellationToken ct);
 
+    /// <summary>Telegram's AI summary of a message (summarizeMessage), optionally translated. Usually needs Telegram Premium.</summary>
+    Task<string> SummarizeMessageAsync(long chatId, long messageId, string? translateTo, CancellationToken ct);
+
+    /// <summary>Telegram's translation of a message (translateMessageText). May need Telegram Premium.</summary>
+    Task<string> TranslateMessageAsync(long chatId, long messageId, string toLanguage, CancellationToken ct);
+
     /// <summary>Chat folder title to the ids of the chats currently in that folder.</summary>
     Task<IReadOnlyDictionary<string, IReadOnlySet<long>>> GetFolderChatsAsync(CancellationToken ct);
 }

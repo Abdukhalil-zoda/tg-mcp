@@ -130,6 +130,25 @@ internal sealed class FakeTelegram : ITelegramClient
         return Task.CompletedTask;
     }
 
+    public TelegramCallException? AiFailure { get; set; }
+    public List<(string Kind, long Chat, long Message, string? Lang)> AiCalls { get; } = [];
+
+    public Task<string> SummarizeMessageAsync(long chatId, long messageId, string? translateTo, CancellationToken ct)
+    {
+        Calls++;
+        if (AiFailure is not null) throw AiFailure;
+        AiCalls.Add(("summary", chatId, messageId, translateTo));
+        return Task.FromResult("short summary");
+    }
+
+    public Task<string> TranslateMessageAsync(long chatId, long messageId, string toLanguage, CancellationToken ct)
+    {
+        Calls++;
+        if (AiFailure is not null) throw AiFailure;
+        AiCalls.Add(("translation", chatId, messageId, toLanguage));
+        return Task.FromResult("translated text");
+    }
+
     public List<(long Chat, long Message, string Text)> Edits { get; } = [];
     public List<(long Chat, long[] Ids, bool ForEveryone)> Deletes { get; } = [];
 
@@ -372,6 +391,7 @@ internal sealed class Harness
     public PreviewChatTool Preview => new(Context);
     public MarkReadTool MarkRead => new(Context);
     public EditMessageTool Edit => new(Context, DraftStore);
+    public AiTools Ai => new(Context);
     public DeleteMessageTool Delete => new(Context, DraftStore);
     public ForwardTool Forward => new(Context, DraftStore, _sendLimiter ??= new PerChatRateLimiter(Policy.Config.SendsPerMinute, Time));
     public ReactTool React => new(Context, DraftStore, _sendLimiter ??= new PerChatRateLimiter(Policy.Config.SendsPerMinute, Time));

@@ -275,6 +275,18 @@ public sealed class TdTelegramClient : ITelegramClient, IInboundMessageSource, I
     }
 
     /// <inheritdoc />
+    public async Task<string> SummarizeMessageAsync(long chatId, long messageId, string? translateTo, CancellationToken ct) =>
+        (await S.CallAsync(new SummarizeMessage
+        {
+            ChatId = chatId, MessageId = messageId, TranslateToLanguageCode = translateTo ?? "", Tone = "",
+        }, ct).ConfigureAwait(false)).Text ?? "";
+
+    /// <inheritdoc />
+    public async Task<string> TranslateMessageAsync(long chatId, long messageId, string toLanguage, CancellationToken ct) =>
+        (await S.CallAsync(new TranslateMessageText { ChatId = chatId, MessageId = messageId, ToLanguageCode = toLanguage, Tone = "" }, ct)
+            .ConfigureAwait(false)).Text ?? "";
+
+    /// <inheritdoc />
     public Task EditMessageTextAsync(long chatId, long messageId, string text, CancellationToken ct) =>
         S.CallAsync(new EditMessageText
         {

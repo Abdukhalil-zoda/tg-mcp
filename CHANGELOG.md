@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `summarize_message(chat, message_id, translate_to?)` and `translate_message(chat, message_id, to_language)`:
+  Telegram's built-in AI summary and translation (`summarizeMessage`, `translateMessageText`). Need
+  `features.summarize` / `features.translate` and `read` + `"summarize"` / `"translate"`; usually require
+  Telegram Premium (Telegram's error is passed through). Results are marked as third-party data.
 - Release workflow: on `v*` tags, a multi-arch image (linux/amd64, linux/arm64) is pushed to
   `ghcr.io/abdukhalil-zoda/tg-mcp` with an SBOM, a provenance attestation and a keyless cosign signature.
   The Dockerfile cross-publishes for the target architecture (`tdlib.native.linux-arm64` added).

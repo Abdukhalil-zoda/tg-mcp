@@ -64,9 +64,9 @@
     "forward": false,       // forward_message: source chat needs "read" + "forward", destination a "write" mode
     "editOwn": false,       // edit_message: only messages TgMcp itself sent (sent-log); chat needs "edit_own" + a "write" mode
     "deleteOwn": false,     // delete_message: only messages TgMcp itself sent; drafts unless "delete.mode" is "on" (see below)
+    "summarize": false,     // summarize_message: Telegram's AI summary (usually needs Telegram Premium)
+    "translate": false,     // translate_message: Telegram's translation (may need Telegram Premium)
     // Reserved for later versions (accepted and validated, currently without effect):
-    "summarize": false,
-    "translate": false,
     "pin": false,
   },
 
@@ -75,7 +75,7 @@
     "read": false,          // true = every chat not denied becomes readable (not recommended)
     "write": "off",         // "off" | "draft" (you approve each message: `tgmcp approve <id>`) | "on" (sent at once)
     "features": [],         // per-chat features: "search", "media_download", "mark_read", "react", "forward",
-                            // "edit_own", "delete_own" (+ reserved: "summarize", "translate", "pin")
+                            // "edit_own", "delete_own", "summarize", "translate" (+ reserved: "pin")
     "sinceDays": null,      // hide messages older than N days; null = no limit
     "notify": false,        // push new messages as events (see "events"); needs "read": true.
                             // Never applies to bot/channel chats or bot senders: those need an explicit rule.

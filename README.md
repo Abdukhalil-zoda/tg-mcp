@@ -52,6 +52,8 @@ TgMcp is a third-party Telegram client built on TDLib with **your own** `api_id`
 | `edit_message` | `edit_own` (`features.editOwn`) + the chat's `write` mode (`features.send`) | Replaces the text of a message **that TgMcp itself sent**, as the owner. Other messages are refused, including your own sent from other apps. TgMcp keeps a sent-log of chat and message ids, no text, in `/data/sent-log.json`. `"on"` edits at once; `"draft"` saves an edit draft. Only if Telegram still allows editing. |
 | `delete_message` | `delete_own` (`features.deleteOwn`) + the chat's `write` mode (`features.send`) | Deletes up to 20 messages **that TgMcp itself sent**. Every deletion is a draft for `tgmcp approve <id>`, unless the chat has `"write": "on"` **and** `"delete": { "mode": "on" }`. `for_everyone: true` deletes them for all participants (explicit flag); otherwise only for you. |
 | `send_message` | `features.send` + the chat's `write` mode | Sends **as the owner's real account**. With `"write": "on"` the message is sent and the tool waits for Telegram's confirmation. With `"draft"` nothing is sent: a draft is saved for `tgmcp approve <id>`. With `"off"` the call is denied. Plain text up to 4096 characters, link previews off, optional `reply_to_message_id`, `topic_id` and `disable_notification`. `topics` restrict where it may post. `limits.sendsPerMinute` applies per chat. |
+| `summarize_message` | read + `summarize` (`features.summarize`) | Telegram's AI summary of one message (`summarizeMessage`), optionally translated (`translate_to`). Usually needs **Telegram Premium**; otherwise Telegram's error is returned. The result is third-party data. `sinceDays`/`topics` apply. |
+| `translate_message` | read + `translate` (`features.translate`) | Telegram's translation of one message (`translateMessageText`) into `to_language` (e.g. `en`, `pt-br`). May need Premium. |
 | `download_media` | read + `media_download` | Size-capped by `limits.maxMediaMb`. Files of unknown size are refused. Files go to `media.dir` (default `/data/media`) and are deleted after `limits.mediaRetentionDays`. |
 
 Each message is returned as `{chat, id, date_utc, sender, from_me, text, has_media}`. `send_message` returns `{status: "sent", chat, message_id, date_utc}` or `{status: "draft", draft_id, chat, message}`. The text being sent is never written to the audit log, only its length. The `chat` argument takes a numeric chat id (as shown by `list_chats`) or a public `@username`.
@@ -257,7 +259,7 @@ The template [`tgmcp.example.jsonc`](tgmcp.example.jsonc) documents every option
 | `media.dir` | absolute path where `download_media` stores files | `/data/media` |
 | `media.hostDir` | absolute host path of `media.dir`. If set, results also include `host_path`. This is pure string mapping, and nothing on the host is accessed. | none |
 
-Feature names in lists, in snake_case: `search`, `media_download`, `summarize`, `translate`, `react`, `mark_read`, `edit_own`, `delete_own`, `forward`, `pin`. In use: `search`, `media_download`, `mark_read`, `react`, `forward`, `edit_own`, `delete_own`. The others are validated and reserved.
+Feature names in lists, in snake_case: `search`, `media_download`, `summarize`, `translate`, `react`, `mark_read`, `edit_own`, `delete_own`, `forward`, `pin`. In use: `search`, `media_download`, `mark_read`, `react`, `forward`, `edit_own`, `delete_own`, `summarize`, `translate`. The others are validated and reserved.
 
 Chat kinds: `private` covers people, secret chats and Saved Messages. `group` covers basic groups and supergroups that aren't channels. `channel` covers broadcast channels. `bot` is a private chat with a bot.
 
@@ -318,7 +320,7 @@ Image: `mcr.microsoft.com/dotnet/runtime:11.0.0-rc.3`, framework-dependent publi
 
 - `send_message` sends plain text only, with no formatting, media or polls. `pin` is reserved. `react` supports emoji reactions only, without paid or custom-emoji reactions.
 - The policy is read once at start. Reconnect the MCP server after editing it.
-- `summarize` and `translate` are reserved. They will probably need Telegram Premium server-side features.
+- `summarize_message` and `translate_message` use Telegram's own AI features. They usually need Telegram Premium, and TgMcp passes Telegram's error through when they're unavailable.
 - Login supports phone, code and 2FA password only. Email-code login, registering a new account and QR login aren't supported. Log in with an official app first if Telegram asks for these.
 - Images exist for linux/amd64 and linux/arm64. The arm64 image is cross-built and has only passed the release smoke test on amd64 so far.
 
