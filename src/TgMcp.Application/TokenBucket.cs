@@ -21,12 +21,18 @@ public sealed class TokenBucket : IRateLimiter
     /// <param name="ratePerMinute">Allowed calls per minute (at least 1).</param>
     /// <param name="time">Clock (use a fake in tests).</param>
     public TokenBucket(int ratePerMinute, TimeProvider time)
+        : this(ratePerMinute, TimeSpan.FromMinutes(1), time)
     {
-        ArgumentOutOfRangeException.ThrowIfLessThan(ratePerMinute, 1);
+    }
+
+    /// <summary>Creates a full bucket of <paramref name="capacity"/> tokens refilled over <paramref name="period"/>.</summary>
+    public TokenBucket(int capacity, TimeSpan period, TimeProvider time)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(capacity, 1);
         ArgumentNullException.ThrowIfNull(time);
         _time = time;
-        _capacity = ratePerMinute;
-        _perSecond = ratePerMinute / 60.0;
+        _capacity = capacity;
+        _perSecond = capacity / period.TotalSeconds;
         _tokens = _capacity;
         _last = time.GetTimestamp();
     }

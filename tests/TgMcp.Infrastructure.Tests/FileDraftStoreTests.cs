@@ -35,6 +35,25 @@ public class FileDraftStoreTests
         Assert.Empty(await store.ListAsync(Ct));
     }
 
+    [Fact]
+    public async Task Join_drafts_round_trip_and_old_message_drafts_still_load()
+    {
+        using var dir = new TempDir();
+        var store = new FileDraftStore(Options.Create(new TelegramOptions { DataDir = dir.Path }), new FakeTimeProvider());
+        var join = new TgMcp.Application.Drafts.PendingJoin(TgMcp.Domain.JoinTargetKind.Invite, "AbCdEfGh12", null, "supergroup", 40);
+        var d = await store.SaveJoinAsync("Private Group", join, Ct);
+        var loaded = await store.GetAsync(d.Id, Ct);
+        Assert.Equal("join", loaded!.Kind);
+        Assert.Equal(join, loaded.Join);
+        Assert.Null(loaded.Message);
+
+        await File.WriteAllTextAsync(Path.Combine(dir.Path, "drafts", "0a0b0c0d.json"),
+            """{"Id":"0a0b0c0d","CreatedUtc":"2030-01-01T00:00:00+00:00","ChatTitle":"T","Message":{"ChatId":-1001234567890,"Text":"hi","ReplyToMessageId":0,"TopicId":null,"DisableNotification":false}}""", Ct);
+        var old = await store.GetAsync("0a0b0c0d", Ct);
+        Assert.Equal("message", old!.Kind);
+        Assert.Equal("hi", old.Message!.Text);
+    }
+
     [Theory]
     [InlineData("../../etc/passwd")]
     [InlineData("ABCDEF12")]

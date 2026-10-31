@@ -213,6 +213,123 @@ public sealed class TdTelegramClient : ITelegramClient, IInboundMessageSource, I
             : $"TDLib could not open its database: {tdError}";
 
     /// <inheritdoc />
+    public async Task<TgChatPreview> PreviewJoinAsync(JoinTarget target, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        if (target.Kind == JoinTargetKind.Invite)
+        {
+            var info = await S.CallAsync(new CheckChatInviteLink { InviteLink = target.Canonical }, ct).ConfigureAwait(false);
+            var (type, kind) = info.Type switch
+            {
+                InviteLinkChatType.InviteLinkChatTypeChannel => ("channel", ChatKind.Channel),
+                InviteLinkChatType.InviteLinkChatTypeSupergroup => ("supergroup", ChatKind.Group),
+                _ => ("group", ChatKind.Group),
+            };
+            long? id = info.ChatId != 0 ? info.ChatId : null;
+            var member = false;
+            if (id is long known)
+            {
+                try
+                {
+                    member = await IsMemberAsync(await S.CallAsync(new GetChat { ChatId = known }, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
+                }
+                catch (TelegramCallException)
+                {
+                    member = false;
+                }
+            }
+            return new TgChatPreview(id, info.Title ?? "", type, kind, [], info.MemberCount, info.CreatesJoinRequest, member);
+        }
+
+        Chat chat;
+        try
+        {
+            chat = await S.CallAsync(new SearchPublicChat { Username = target.Value }, ct).ConfigureAwait(false);
+        }
+        catch (TelegramCallException e) when (e.Code == 400)
+        {
+            throw new ArgumentException("no public chat with that username", nameof(target));
+        }
+        var mapped = await MapChat(chat, ct).ConfigureAwait(false);
+        if (chat.Type is ChatType.ChatTypeSupergroup sg)
+        {
+            var g = await S.CallAsync(new GetSupergroup { SupergroupId = sg.SupergroupId }, ct).ConfigureAwait(false);
+            return new TgChatPreview(chat.Id, mapped.Title, sg.IsChannel ? "channel" : "supergroup", mapped.Kind, mapped.Usernames,
+                g.MemberCount, g.JoinByRequest, IsMember(g.Status));
+        }
+        var other = mapped.Kind == ChatKind.Bot ? "bot" : mapped.Kind == ChatKind.Private ? "private" : "group";
+        return new TgChatPreview(chat.Id, mapped.Title, other, mapped.Kind, mapped.Usernames, 0, false, false);
+    }
+
+    /// <inheritdoc />
+    public async Task<TgJoinResult> JoinAsync(JoinTarget target, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        long? knownId = null;
+        var title = "";
+        ChatJoinResult result;
+        try
+        {
+            if (target.Kind == JoinTargetKind.Invite)
+            {
+                result = await S.CallAsync(new JoinChatByInviteLink { InviteLink = target.Canonical }, ct).ConfigureAwait(false);
+            }
+            else
+            {
+                var pub = await S.CallAsync(new SearchPublicChat { Username = target.Value }, ct).ConfigureAwait(false);
+                knownId = pub.Id;
+                title = pub.Title ?? "";
+                result = await S.CallAsync(new JoinChat { ChatId = pub.Id }, ct).ConfigureAwait(false);
+            }
+        }
+        catch (TelegramCallException e) when (e.TdMessage.Contains("INVITE_REQUEST_SENT", StringComparison.OrdinalIgnoreCase))
+        {
+            return new TgJoinResult("requested", knownId, title);
+        }
+        switch (result)
+        {
+            case ChatJoinResult.ChatJoinResultSuccess ok:
+                if (title.Length == 0)
+                {
+                    try
+                    {
+                        title = (await S.CallAsync(new GetChat { ChatId = ok.ChatId }, ct).ConfigureAwait(false)).Title ?? "";
+                    }
+                    catch (TelegramCallException)
+                    {
+                        // title is optional
+                    }
+                }
+                return new TgJoinResult("joined", ok.ChatId, title);
+            case ChatJoinResult.ChatJoinResultRequestSent:
+                return new TgJoinResult("requested", knownId, title);
+            case ChatJoinResult.ChatJoinResultGuardBotApprovalRequired:
+                throw new TelegramCallException(403, "this chat requires approval from a guard bot (Web App); join it manually in Telegram");
+            case ChatJoinResult.ChatJoinResultDeclined:
+                throw new TelegramCallException(403, "the join was declined by the chat's guard bot");
+            default:
+                return new TgJoinResult("joined", knownId, title);
+        }
+    }
+
+    private async Task<bool> IsMemberAsync(Chat chat, CancellationToken ct)
+    {
+        switch (chat.Type)
+        {
+            case ChatType.ChatTypeSupergroup sg:
+                return IsMember((await S.CallAsync(new GetSupergroup { SupergroupId = sg.SupergroupId }, ct).ConfigureAwait(false)).Status);
+            case ChatType.ChatTypeBasicGroup bg:
+                return IsMember((await S.CallAsync(new GetBasicGroup { BasicGroupId = bg.BasicGroupId }, ct).ConfigureAwait(false)).Status);
+            default:
+                return false;
+        }
+    }
+
+    private static bool IsMember(ChatMemberStatus? status) => status is ChatMemberStatus.ChatMemberStatusMember
+        or ChatMemberStatus.ChatMemberStatusAdministrator or ChatMemberStatus.ChatMemberStatusCreator
+        or ChatMemberStatus.ChatMemberStatusRestricted { IsMember: true };
+
+    /// <inheritdoc />
     public async Task<TgSent> SendMessageAsync(OutgoingMessage message, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(message);

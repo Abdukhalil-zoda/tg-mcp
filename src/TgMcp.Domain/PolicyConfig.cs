@@ -150,6 +150,15 @@ public sealed class PolicyConfig
     /// <summary>limits.mediaRetentionDays: downloaded media older than this is deleted (0 = keep forever).</summary>
     public int MediaRetentionDays { get; private set; } = 7;
 
+    /// <summary>limits.joinsPerHour: join_chat calls (joined or drafted) per hour.</summary>
+    public int JoinsPerHour { get; private set; } = 5;
+
+    /// <summary>join.mode: off (default), draft (owner approves) or on (only targets in join.allow).</summary>
+    public WriteMode JoinMode { get; private set; } = WriteMode.Off;
+
+    /// <summary>join.allow: targets that may be joined in mode "on" ("*" = any).</summary>
+    public IReadOnlyList<JoinAllowEntry> JoinAllow { get; private set; } = [];
+
     /// <summary>limits.sendsPerMinute: messages (sent or drafted) per chat per minute.</summary>
     public int SendsPerMinute { get; private set; } = 10;
 
@@ -257,7 +266,8 @@ public sealed class PolicyConfig
             {
                 var parent = e.Key[..i];
                 var leaf = parent[(parent.LastIndexOf(':') + 1)..];
-                if (leaf.Equals("features", StringComparison.OrdinalIgnoreCase) || leaf.Equals("topics", StringComparison.OrdinalIgnoreCase))
+                if (leaf.Equals("features", StringComparison.OrdinalIgnoreCase) || leaf.Equals("topics", StringComparison.OrdinalIgnoreCase)
+                    || leaf.Equals("allow", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!lists.TryGetValue(parent, out var items)) lists[parent] = items = [];
                     items[idx] = e.Value!;
@@ -378,8 +388,17 @@ public sealed class PolicyConfig
                         case "maxmessagespercall": MaxMessagesPerCall = Positive(key, value) ?? MaxMessagesPerCall; break;
                         case "rateperminute": RatePerMinute = Positive(key, value) ?? RatePerMinute; break;
                         case "maxmediamb": MaxMediaMb = Positive(key, value) ?? MaxMediaMb; break;
+                        case "joinsperhour": JoinsPerHour = Positive(key, value) ?? JoinsPerHour; break;
                         case "sendsperminute": SendsPerMinute = Positive(key, value) ?? SendsPerMinute; break;
                         case "mediaretentiondays": MediaRetentionDays = NonNegative(key, value) ?? MediaRetentionDays; break;
+                        default: Unknown(key); break;
+                    }
+                    break;
+                case "join" when p.Length == 2:
+                    switch (p[1].ToLowerInvariant())
+                    {
+                        case "mode": JoinMode = Write(key, value) ?? WriteMode.Off; break;
+                        case "allow": JoinAllow = AllowList(key, value); break;
                         default: Unknown(key); break;
                     }
                     break;
@@ -573,6 +592,22 @@ public sealed class PolicyConfig
         return set.Count == 0 ? null : set; // empty list = no topic restriction
     }
 
+    private IReadOnlyList<JoinAllowEntry> AllowList(string key, string v)
+    {
+        var list = new List<JoinAllowEntry>();
+        foreach (var item in Split(v))
+        {
+            if (JoinAllowEntry.TryParse(item, out var e)) list.Add(e!);
+            else _errors.Add($"{key}: '{Redact(item)}' is not \"*\", a username, @username, a t.me link or +invitehash");
+        }
+        return list;
+    }
+
+    /// <summary>Invite hashes are secrets of a kind: never echo them in errors.</summary>
+    private static string Redact(string item) => item.Contains('+', StringComparison.Ordinal) || item.Contains("joinchat", StringComparison.OrdinalIgnoreCase)
+        ? "(invite " + JoinTarget.HashPrefix(item) + ")"
+        : item;
+
     private static IEnumerable<string> Split(string v) =>
         v.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
@@ -591,7 +626,8 @@ public sealed class PolicyConfig
         foreach (var r in Chats)
             sb.Append($"{r.Label} read={r.Read?.ToString().ToLowerInvariant() ?? "-"} write={(r.Write is WriteMode w ? Names.Snake(w) : "-")} features={F(r.Features)} since_days={r.SinceDays?.ToString(CultureInfo.InvariantCulture) ?? "-"} topics={(r.Topics is null ? "-" : string.Join(",", r.Topics.Order()))} notify={r.Notify?.ToString().ToLowerInvariant() ?? "-"}\n");
         foreach (var d in Denies) sb.Append($"{d.Label}\n");
-        sb.Append($"limits list_chats={Names.Snake(ListChats)} max_messages_per_call={MaxMessagesPerCall} rate_per_minute={RatePerMinute} max_media_mb={MaxMediaMb} media_retention_days={MediaRetentionDays} sends_per_minute={SendsPerMinute}\n");
+        sb.Append($"limits list_chats={Names.Snake(ListChats)} max_messages_per_call={MaxMessagesPerCall} rate_per_minute={RatePerMinute} max_media_mb={MaxMediaMb} media_retention_days={MediaRetentionDays} sends_per_minute={SendsPerMinute} joins_per_hour={JoinsPerHour}\n");
+        sb.Append($"join mode={Names.Snake(JoinMode)} allow={string.Join(",", JoinAllow.Select(a => a.ToString()).Order(StringComparer.Ordinal))}\n");
         return sb.ToString();
     }
 

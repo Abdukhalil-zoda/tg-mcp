@@ -80,6 +80,9 @@ public static class Composition
         services.AddSingleton<ISendLimiter>(sp => new PerChatRateLimiter(sp.GetRequiredService<IPolicy>().Config.SendsPerMinute, sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<IDraftStore, FileDraftStore>();
         services.AddSingleton<SendMessageTool>();
+        services.AddSingleton<IJoinLimiter>(sp => new JoinRateLimiter(sp.GetRequiredService<IPolicy>().Config.JoinsPerHour, sp.GetRequiredService<TimeProvider>()));
+        services.AddSingleton<JoinChatTool>();
+        services.AddSingleton<PreviewChatTool>();
         services.AddSingleton<DraftCommands>();
         services.AddSingleton<IInboundMessageSource>(sp => sp.GetRequiredService<TdTelegramClient>());
         services.AddSingleton<IEventStateStore, FileEventStateStore>();

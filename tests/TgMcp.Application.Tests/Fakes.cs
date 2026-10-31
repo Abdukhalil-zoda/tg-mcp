@@ -107,6 +107,24 @@ internal sealed class FakeTelegram : ITelegramClient
         return Task.FromResult(new TgSent(message.ChatId, 1000 + Sent.Count, Harness.Now));
     }
 
+    public Dictionary<string, TgChatPreview> Previews { get; } = [];
+    public List<JoinTarget> Joins { get; } = [];
+    public string JoinStatus { get; set; } = "joined";
+
+    public Task<TgChatPreview> PreviewJoinAsync(JoinTarget target, CancellationToken ct)
+    {
+        Calls++;
+        return Previews.TryGetValue(target.Value, out var p) ? Task.FromResult(p) : throw new ArgumentException("no public chat with that username", nameof(target));
+    }
+
+    public Task<TgJoinResult> JoinAsync(JoinTarget target, CancellationToken ct)
+    {
+        Calls++;
+        Joins.Add(target);
+        var p = Previews[target.Value];
+        return Task.FromResult(JoinStatus == "requested" ? new TgJoinResult("requested", null, "") : new TgJoinResult(JoinStatus, p.ChatId ?? -100777, p.Title));
+    }
+
     public Task<IReadOnlyDictionary<string, IReadOnlySet<long>>> GetFolderChatsAsync(CancellationToken ct)
     {
         Calls++;
@@ -160,6 +178,13 @@ internal sealed class MemoryDraftStore : IDraftStore
     public Task<Draft> SaveAsync(string chatTitle, OutgoingMessage message, CancellationToken ct)
     {
         var d = new Draft($"{++_next:x8}", Harness.Now, chatTitle, message);
+        Drafts[d.Id] = d;
+        return Task.FromResult(d);
+    }
+
+    public Task<Draft> SaveJoinAsync(string chatTitle, PendingJoin join, CancellationToken ct)
+    {
+        var d = new Draft($"{++_next:x8}", Harness.Now, chatTitle, null, Draft.JoinKind, join);
         Drafts[d.Id] = d;
         return Task.FromResult(d);
     }
@@ -224,6 +249,9 @@ internal sealed class Harness
     private ISendLimiter? _sendLimiter;
     public SendMessageTool Send => new(Context, DraftStore, _sendLimiter ??= new PerChatRateLimiter(Policy.Config.SendsPerMinute, Time));
     public DraftCommands DraftCommands => new(DraftStore, Context, Audit);
+    private IJoinLimiter? _joinLimiter;
+    public JoinChatTool Join => new(Context, DraftStore, _joinLimiter ??= new JoinRateLimiter(Policy.Config.JoinsPerHour, Time));
+    public PreviewChatTool Preview => new(Context);
     public FakeNotifier Notifier { get; } = new();
     public MemoryEventState EventState { get; } = new();
     private InboundEventProcessor? _events;

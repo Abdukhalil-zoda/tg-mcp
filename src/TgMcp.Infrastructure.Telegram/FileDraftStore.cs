@@ -26,10 +26,16 @@ public sealed class FileDraftStore : IDraftStore
     }
 
     /// <inheritdoc />
-    public async Task<Draft> SaveAsync(string chatTitle, OutgoingMessage message, CancellationToken ct)
+    public Task<Draft> SaveAsync(string chatTitle, OutgoingMessage message, CancellationToken ct) =>
+        WriteAsync(new Draft(NewId(), _time.GetUtcNow(), chatTitle, message), ct);
+
+    /// <inheritdoc />
+    public Task<Draft> SaveJoinAsync(string chatTitle, PendingJoin join, CancellationToken ct) =>
+        WriteAsync(new Draft(NewId(), _time.GetUtcNow(), chatTitle, null, Draft.JoinKind, join), ct);
+
+    private async Task<Draft> WriteAsync(Draft draft, CancellationToken ct)
     {
         EnsureDir();
-        var draft = new Draft(NewId(), _time.GetUtcNow(), chatTitle, message);
         var path = PathOf(draft.Id);
         var options = new FileStreamOptions
         {

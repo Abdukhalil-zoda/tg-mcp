@@ -87,6 +87,8 @@ public enum GlobalSwitch
     Forward,
     /// <summary>Pin feature.</summary>
     Pin,
+    /// <summary>Joining groups/channels (join_chat, preview_chat).</summary>
+    Join,
 }
 
 /// <summary>What a tool call needs from the policy.</summary>
@@ -118,6 +120,8 @@ public enum Need
     Forward,
     /// <summary>Feature pin.</summary>
     Pin,
+    /// <summary>Join a group or channel (global switch features.join + join.mode).</summary>
+    Join,
 }
 
 /// <summary>Which part of the policy produced a decision.</summary>
@@ -255,7 +259,7 @@ public static class Names
     /// <summary>The per-chat feature a need requires, or null for read/write needs.</summary>
     public static Feature? AsFeature(Need n) => n switch
     {
-        Need.Read or Need.Write or Need.WriteOn => null,
+        Need.Read or Need.Write or Need.WriteOn or Need.Join => null,
         _ => Enum.Parse<Feature>(n.ToString()),
     };
 

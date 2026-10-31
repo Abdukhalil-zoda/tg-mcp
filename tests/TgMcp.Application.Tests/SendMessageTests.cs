@@ -54,7 +54,7 @@ public class SendMessageTests
         Assert.Contains($"tgmcp approve {id}", root.GetProperty("message").GetString(), StringComparison.Ordinal);
         Assert.Empty(h.Telegram.Sent);
         var draft = h.DraftStore.Drafts[id];
-        Assert.Equal(Secret, draft.Message.Text);
+        Assert.Equal(Secret, draft.Message!.Text);
         Assert.Equal(1, draft.Message.ReplyToMessageId);
         Assert.Equal("Friend", draft.ChatTitle);
     }
@@ -188,7 +188,7 @@ public class SendMessageTests
         var id = Json(await h.Send.RunAsync("111", Secret, 0, 0, false, Ct)).GetProperty("draft_id").GetString()!;
         var denied = new Harness(("Enabled", "true"), ("Features__Send", "true"), ("Chats__0__Id", "111"), ("Chats__0__Write", "draft"), ("Deny__0__Id", "111"));
         denied.Telegram.Add(Friend);
-        await denied.DraftStore.SaveAsync("Friend", h.DraftStore.Drafts[id].Message, Ct);
+        await denied.DraftStore.SaveAsync("Friend", h.DraftStore.Drafts[id].Message!, Ct);
         var r = await denied.DraftCommands.ApproveAsync("00000001", Ct);
         Assert.Equal(Denials.HardDeny, r.Text);
         Assert.Empty(denied.Telegram.Sent);

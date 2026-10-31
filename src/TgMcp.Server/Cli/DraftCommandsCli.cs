@@ -23,9 +23,15 @@ public static class DraftCommandsCli
                     if (list.Count == 0) output.WriteLine("no drafts");
                     foreach (var d in list)
                     {
-                        var preview = d.Message.Text.ReplaceLineEndings(" ");
+                        if (d.Kind == Draft.JoinKind && d.Join is { } j)
+                        {
+                            var what = j.TargetKind == TgMcp.Domain.JoinTargetKind.Invite ? $"invite link ({j.Target.AuditRef})" : "@" + j.TargetValue;
+                            output.WriteLine($"{d.Id}  {d.CreatedUtc.UtcDateTime:yyyy-MM-dd HH:mm}Z  JOIN {what} \"{d.ChatTitle}\" ({j.Type}, {j.MemberCount} members)");
+                            continue;
+                        }
+                        var preview = (d.Message?.Text ?? "").ReplaceLineEndings(" ");
                         if (preview.Length > 80) preview = preview[..80] + "...";
-                        output.WriteLine($"{d.Id}  {d.CreatedUtc.UtcDateTime:yyyy-MM-dd HH:mm}Z  chat {d.Message.ChatId} \"{d.ChatTitle}\"  {preview}");
+                        output.WriteLine($"{d.Id}  {d.CreatedUtc.UtcDateTime:yyyy-MM-dd HH:mm}Z  chat {d.Message?.ChatId} \"{d.ChatTitle}\"  {preview}");
                     }
                     return 0;
                 case "approve" when id is not null:

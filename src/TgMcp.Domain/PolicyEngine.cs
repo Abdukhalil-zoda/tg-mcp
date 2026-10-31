@@ -35,7 +35,21 @@ public interface IPolicy
 
     /// <summary>Records that folders could not be resolved; folder denies then match every chat.</summary>
     void SetFolderError(string reason);
+
+    /// <summary>
+    /// Whether join_chat may act on <paramref name="target"/> now: global gates and features.join, then join.mode
+    /// (off: denied; draft: allowed as a draft; on: only if join.allow matches). Deny rules are checked separately
+    /// on the resolved chat with <see cref="Effective"/>.
+    /// </summary>
+    JoinDecision CheckJoin(JoinTarget target);
 }
+
+/// <summary>Outcome of a join check.</summary>
+/// <param name="Allowed">True if the call may proceed (as a draft or a join).</param>
+/// <param name="Mode">Effective join.mode.</param>
+/// <param name="Reason">Short reason.</param>
+/// <param name="Global">The global decision when a global gate denied it (master switch, features.join, config).</param>
+public sealed record JoinDecision(bool Allowed, WriteMode Mode, string Reason, Decision? Global = null);
 
 /// <summary>
 /// Decision order: master Enabled -> global feature switch -> Deny (always wins) -> first matching Chats
@@ -156,6 +170,22 @@ public sealed class PolicyEngine : IPolicy
         if (!e.Allowed) return null;
         if (Config.ListChats == ListChatsMode.AllowedOnly && !Check(chat, Need.Read).Allowed) return null;
         return e;
+    }
+
+    /// <inheritdoc />
+    public JoinDecision CheckJoin(JoinTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        var g = CheckGlobal(Need.Join);
+        if (!g.Allowed) return new JoinDecision(false, Config.JoinMode, g.Reason, g);
+        return Config.JoinMode switch
+        {
+            WriteMode.Off => new JoinDecision(false, WriteMode.Off, "join.mode is off"),
+            WriteMode.Draft => new JoinDecision(true, WriteMode.Draft, "draft"),
+            _ when Config.JoinAllow.Count == 0 => new JoinDecision(false, WriteMode.On, "join.allow is empty"),
+            _ when Config.JoinAllow.Any(a => a.Matches(target)) => new JoinDecision(true, WriteMode.On, "allowed by join.allow"),
+            _ => new JoinDecision(false, WriteMode.On, "target is not in join.allow"),
+        };
     }
 
     private string ConfigProblem() =>

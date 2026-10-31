@@ -14,7 +14,8 @@ const string Usage = """
       config check [file]
                       print the effective policy and exit (non-zero if invalid); never contacts Telegram
       drafts          list drafts waiting for approval
-      approve <id>    send a draft as the owner, then delete it (stop the MCP server first: one TDLib process per data dir)
+      approve <id>    carry out a draft as the owner (send the message / join the chat), then delete it
+                      (stop the MCP server first: one TDLib process per data dir)
       reject <id>     delete a draft without sending it
       help            show this text
 

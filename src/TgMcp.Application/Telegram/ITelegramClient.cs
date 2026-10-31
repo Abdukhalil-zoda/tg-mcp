@@ -83,6 +83,28 @@ public sealed record OutgoingMessage(long ChatId, string Text, long ReplyToMessa
 /// <param name="Date">Server date (UTC).</param>
 public sealed record TgSent(long ChatId, long MessageId, DateTimeOffset Date);
 
+/// <summary>What a join target would join, without joining (preview_chat).</summary>
+/// <param name="ChatId">Chat id if TDLib already knows the chat (public chats, or chats the owner can access).</param>
+/// <param name="Title">Chat title.</param>
+/// <param name="Type">"group", "supergroup", "channel", or "private"/"bot" for non-joinable targets.</param>
+/// <param name="Kind">Policy chat kind (for deny rules).</param>
+/// <param name="Usernames">Public usernames, if any.</param>
+/// <param name="MemberCount">Member count (0 if unknown).</param>
+/// <param name="JoinRequestNeeded">True if joining only sends a join request that admins must approve.</param>
+/// <param name="AlreadyMember">True if the owner is already a member.</param>
+public sealed record TgChatPreview(long? ChatId, string Title, string Type, ChatKind Kind, IReadOnlyList<string> Usernames,
+    int MemberCount, bool JoinRequestNeeded, bool AlreadyMember)
+{
+    /// <summary>True for groups, supergroups and channels.</summary>
+    public bool Joinable => Type is "group" or "supergroup" or "channel";
+}
+
+/// <summary>Result of a join.</summary>
+/// <param name="Status">"joined", "requested" (join request sent) or "already_member".</param>
+/// <param name="ChatId">The chat id, if known.</param>
+/// <param name="Title">Chat title.</param>
+public sealed record TgJoinResult(string Status, long? ChatId, string Title);
+
 /// <summary>Telegram is not usable right now (no credentials, not logged in, closed).</summary>
 /// <param name="message">Reason, safe to show to the client.</param>
 public sealed class TelegramUnavailableException(string message) : Exception(message);
@@ -137,6 +159,12 @@ public interface ITelegramClient
     /// (temporary id replaced by the final one). Throws <see cref="TelegramCallException"/> on failure or timeout.
     /// </summary>
     Task<TgSent> SendMessageAsync(OutgoingMessage message, CancellationToken ct);
+
+    /// <summary>Resolves a join target without joining (searchPublicChat / checkChatInviteLink).</summary>
+    Task<TgChatPreview> PreviewJoinAsync(JoinTarget target, CancellationToken ct);
+
+    /// <summary>Joins (joinChat / joinChatByInviteLink). A join request counts as success with status "requested".</summary>
+    Task<TgJoinResult> JoinAsync(JoinTarget target, CancellationToken ct);
 
     /// <summary>Chat folder title to the ids of the chats currently in that folder.</summary>
     Task<IReadOnlyDictionary<string, IReadOnlySet<long>>> GetFolderChatsAsync(CancellationToken ct);
