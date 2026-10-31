@@ -27,12 +27,14 @@ public sealed class TelegramTools
     private readonly PreviewChatTool _preview;
     private readonly MarkReadTool _markRead;
     private readonly ReactTool _react;
+    private readonly ForwardTool _forward;
 
     /// <summary>Created per call by the MCP host.</summary>
     public TelegramTools(ListChatsTool list, ReadMessagesTool read, ReadTopicTool topic, GetMessageTool get,
         SearchChatTool searchChat, SearchAllTool searchAll, DownloadMediaTool download, SendMessageTool send,
-        JoinChatTool join, PreviewChatTool preview, MarkReadTool markRead, ReactTool react)
+        JoinChatTool join, PreviewChatTool preview, MarkReadTool markRead, ReactTool react, ForwardTool forward)
     {
+        _forward = forward;
         _react = react;
         _markRead = markRead;
         _join = join;
@@ -167,6 +169,19 @@ public sealed class TelegramTools
         [Description("One emoji such as 👍 (must be available for this message); empty or null removes the owner's reactions.")] string? emoji = null,
         CancellationToken cancellationToken = default) =>
         Map(await _react.RunAsync(chat, message_id, emoji, cancellationToken).ConfigureAwait(false));
+
+    /// <summary>forward_message.</summary>
+    [McpServerTool(Name = "forward_message", ReadOnly = false, Destructive = false, Idempotent = false, OpenWorld = true)]
+    [Description("Forward messages from one chat to another AS THE OWNER (recipients see the owner forwarding them). The source chat must be readable " +
+        "with the forward feature; the destination needs a write mode: forwarded at once, or saved as a draft the owner approves. Use only when the owner asked.")]
+    public async Task<CallToolResult> ForwardMessage(
+        [Description("Source chat id or @username.")] string from_chat,
+        [Description("Message ids in the source chat (1-20).")] long[] message_ids,
+        [Description("Destination chat id or @username.")] string to_chat,
+        [Description("Destination forum topic id (0 = none).")] int to_topic_id = 0,
+        [Description("Send copies without the 'forwarded from' header.")] bool send_copy = false,
+        CancellationToken cancellationToken = default) =>
+        Map(await _forward.RunAsync(from_chat, message_ids, to_chat, to_topic_id, send_copy, cancellationToken).ConfigureAwait(false));
 
     private static CallToolResult Map(ToolResult r) => new()
     {

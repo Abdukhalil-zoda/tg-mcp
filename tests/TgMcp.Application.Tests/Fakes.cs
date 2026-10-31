@@ -130,6 +130,24 @@ internal sealed class FakeTelegram : ITelegramClient
         return Task.CompletedTask;
     }
 
+    public HashSet<(long Chat, long Message)> Protected { get; } = [];
+    public List<(long From, long[] Ids, long To, int? Topic, bool Copy)> Forwards { get; } = [];
+    private long _nextForwardId = 9000;
+
+    public Task<TgMessageProperties> GetMessagePropertiesAsync(long chatId, long messageId, CancellationToken ct)
+    {
+        Calls++;
+        var own = Messages.GetValueOrDefault(chatId, []).FirstOrDefault(m => m.Id == messageId)?.FromMe == true;
+        return Task.FromResult(new TgMessageProperties(!Protected.Contains((chatId, messageId)), own, own, true));
+    }
+
+    public Task<IReadOnlyList<long>> ForwardMessagesAsync(long fromChatId, IReadOnlyList<long> messageIds, long toChatId, int? toTopicId, bool sendCopy, CancellationToken ct)
+    {
+        Calls++;
+        Forwards.Add((fromChatId, [.. messageIds], toChatId, toTopicId, sendCopy));
+        return Task.FromResult<IReadOnlyList<long>>([.. messageIds.Select(_ => ++_nextForwardId)]);
+    }
+
     public List<(long Chat, long? UpTo)> MarkedRead { get; } = [];
 
     public Task<long?> MarkReadAsync(long chatId, long? upToMessageId, CancellationToken ct)
@@ -222,6 +240,13 @@ internal sealed class MemoryDraftStore : IDraftStore
         return Task.FromResult(d);
     }
 
+    public Task<Draft> SaveForwardAsync(string chatTitle, PendingForward forward, CancellationToken ct)
+    {
+        var d = new Draft($"{++_next:x8}", Harness.Now, chatTitle, null, Draft.ForwardKind, Forward: forward);
+        Drafts[d.Id] = d;
+        return Task.FromResult(d);
+    }
+
     public Task<Draft> SaveReactionAsync(string chatTitle, PendingReaction reaction, CancellationToken ct)
     {
         var d = new Draft($"{++_next:x8}", Harness.Now, chatTitle, null, Draft.ReactionKind, Reaction: reaction);
@@ -293,6 +318,7 @@ internal sealed class Harness
     public JoinChatTool Join => new(Context, DraftStore, _joinLimiter ??= new JoinRateLimiter(Policy.Config.JoinsPerHour, Time));
     public PreviewChatTool Preview => new(Context);
     public MarkReadTool MarkRead => new(Context);
+    public ForwardTool Forward => new(Context, DraftStore, _sendLimiter ??= new PerChatRateLimiter(Policy.Config.SendsPerMinute, Time));
     public ReactTool React => new(Context, DraftStore, _sendLimiter ??= new PerChatRateLimiter(Policy.Config.SendsPerMinute, Time));
     public FakeNotifier Notifier { get; } = new();
     public MemoryEventState EventState { get; } = new();

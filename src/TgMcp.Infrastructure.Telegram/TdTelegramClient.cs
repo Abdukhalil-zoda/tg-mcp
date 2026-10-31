@@ -245,6 +245,36 @@ public sealed class TdTelegramClient : ITelegramClient, IInboundMessageSource, I
         }, ct);
 
     /// <inheritdoc />
+    public async Task<TgMessageProperties> GetMessagePropertiesAsync(long chatId, long messageId, CancellationToken ct)
+    {
+        var p = await S.CallAsync(new GetMessageProperties { ChatId = chatId, MessageId = messageId }, ct).ConfigureAwait(false);
+        return new TgMessageProperties(p.CanBeForwarded, p.CanBeEdited, p.CanBeDeletedForAllUsers, p.CanBeDeletedOnlyForSelf);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<long>> ForwardMessagesAsync(long fromChatId, IReadOnlyList<long> messageIds, long toChatId, int? toTopicId, bool sendCopy, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(messageIds);
+        var result = await S.CallAsync(new ForwardMessages
+        {
+            ChatId = toChatId,
+            TopicId = toTopicId is int t ? new MessageTopic.MessageTopicForum { ForumTopicId = t } : null,
+            FromChatId = fromChatId,
+            MessageIds = [.. messageIds],
+            Options = new MessageSendOptions(),
+            SendCopy = sendCopy,
+            RemoveCaption = false,
+        }, ct).ConfigureAwait(false);
+        var ids = new List<long>();
+        foreach (var temp in result.Messages_ ?? [])
+        {
+            if (temp is null) throw new TelegramCallException(400, "a message could not be forwarded");
+            ids.Add((await S.ConfirmAsync(temp, SendConfirmTimeout, ct).ConfigureAwait(false)).Id);
+        }
+        return ids;
+    }
+
+    /// <inheritdoc />
     public async Task<long?> MarkReadAsync(long chatId, long? upToMessageId, CancellationToken ct)
     {
         var upTo = upToMessageId;

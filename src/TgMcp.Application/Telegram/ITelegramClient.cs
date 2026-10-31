@@ -112,6 +112,13 @@ public sealed record TgJoinResult(string Status, long? ChatId, string Title);
 /// <param name="Unavailable">Why reactions are unavailable (e.g. anonymous admin), or null.</param>
 public sealed record TgReactionOptions(IReadOnlyList<string> Emojis, IReadOnlyList<string> PremiumOnly, IReadOnlyList<string> Chosen, string? Unavailable);
 
+/// <summary>What may be done with a message.</summary>
+/// <param name="CanBeForwarded">forwardMessages is allowed.</param>
+/// <param name="CanBeEdited">editMessageText is allowed.</param>
+/// <param name="CanBeDeletedForAllUsers">deleteMessages with revoke is allowed.</param>
+/// <param name="CanBeDeletedOnlyForSelf">deleteMessages without revoke is allowed.</param>
+public sealed record TgMessageProperties(bool CanBeForwarded, bool CanBeEdited, bool CanBeDeletedForAllUsers, bool CanBeDeletedOnlyForSelf);
+
 /// <summary>Telegram is not usable right now (no credentials, not logged in, closed).</summary>
 /// <param name="message">Reason, safe to show to the client.</param>
 public sealed class TelegramUnavailableException(string message) : Exception(message);
@@ -187,6 +194,15 @@ public interface ITelegramClient
 
     /// <summary>Joins (joinChat / joinChatByInviteLink). A join request counts as success with status "requested".</summary>
     Task<TgJoinResult> JoinAsync(JoinTarget target, CancellationToken ct);
+
+    /// <summary>Message capabilities (getMessageProperties).</summary>
+    Task<TgMessageProperties> GetMessagePropertiesAsync(long chatId, long messageId, CancellationToken ct);
+
+    /// <summary>
+    /// Forwards messages (forwardMessages) and waits for Telegram to confirm them. Returns the final ids in the
+    /// destination chat. <paramref name="sendCopy"/> sends copies without the "forwarded from" header.
+    /// </summary>
+    Task<IReadOnlyList<long>> ForwardMessagesAsync(long fromChatId, IReadOnlyList<long> messageIds, long toChatId, int? toTopicId, bool sendCopy, CancellationToken ct);
 
     /// <summary>Chat folder title to the ids of the chats currently in that folder.</summary>
     Task<IReadOnlyDictionary<string, IReadOnlySet<long>>> GetFolderChatsAsync(CancellationToken ct);

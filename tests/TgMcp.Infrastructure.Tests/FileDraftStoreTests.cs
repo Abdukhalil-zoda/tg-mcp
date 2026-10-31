@@ -55,6 +55,17 @@ public class FileDraftStoreTests
     }
 
     [Fact]
+    public async Task Forward_drafts_round_trip()
+    {
+        using var dir = new TempDir();
+        var store = new FileDraftStore(Options.Create(new TelegramOptions { DataDir = dir.Path }), new FakeTimeProvider());
+        var d = await store.SaveForwardAsync("Saved", new TgMcp.Application.Drafts.PendingForward(-1001234567890, [1, 2], 222, 5, true), Ct);
+        var f = (await store.GetAsync(d.Id, Ct))!.Forward!;
+        Assert.Equal([1L, 2L], f.MessageIds);
+        Assert.Equal((-1001234567890L, 222L, (int?)5, true), (f.FromChatId, f.ToChatId, f.ToTopicId, f.SendCopy));
+    }
+
+    [Fact]
     public async Task Reaction_drafts_round_trip()
     {
         using var dir = new TempDir();

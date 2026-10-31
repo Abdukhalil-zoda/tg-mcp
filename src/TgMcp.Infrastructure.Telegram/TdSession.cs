@@ -166,6 +166,13 @@ public sealed partial class TdSession : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(request);
         var temp = await CallAsync(request, ct).ConfigureAwait(false);
+        return await ConfirmAsync(temp, timeout, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Waits until a message returned by a send/forward call has its final id.</summary>
+    public async Task<Message> ConfirmAsync(Message temp, TimeSpan timeout, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(temp);
         if (temp.SendingState is null) return temp; // already final
         if (temp.SendingState is MessageSendingState.MessageSendingStateFailed f)
             throw new TelegramCallException(f.Error?.Code ?? 0, f.Error?.Message ?? "send failed");

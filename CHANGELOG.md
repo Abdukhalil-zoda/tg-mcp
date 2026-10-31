@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `forward_message(from_chat, message_ids, to_chat, to_topic_id?, send_copy?)`: forwards up to 20 messages as
+  the owner. Source needs `read` + `"forward"` (`features.forward`) and each message must pass
+  `sinceDays`/`topics` and be forwardable; destination needs a `write` mode (`"on"` forwards, `"draft"`
+  saves a forward draft for `tgmcp approve`), no read required. Deny rules win on both sides.
 - `react(chat, message_id, emoji?)`: adds an emoji reaction as the owner or removes the owner's reactions.
   Needs `features.react` + `features.send`, and `read` + `"react"` + a `write` mode in the chat rule:
   `"on"` applies it, `"draft"` saves a reaction draft for `tgmcp approve`. Validated against

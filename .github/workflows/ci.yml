@@ -43,4 +43,4 @@ jobs:
             sleep 3
           } | docker run -i --rm --network none --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
                 -v "$PWD/tgmcp.example.jsonc:/config/tgmcp.json:ro" tgmcp:ci > out.jsonl
-          python3 -c "import json; rows=[json.loads(l) for l in open('out.jsonl')]; tools=[t['name'] for r in rows if r.get('id')==2 for t in r['result']['tools']]; print(tools); assert len(tools)==12"
+          python3 -c "import json; rows=[json.loads(l) for l in open('out.jsonl')]; tools=[t['name'] for r in rows if r.get('id')==2 for t in r['result']['tools']]; print(tools); assert len(tools)==13"

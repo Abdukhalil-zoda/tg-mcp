@@ -32,6 +32,7 @@ public sealed class DraftCommands
         var draft = await _drafts.GetAsync(id, ct).ConfigureAwait(false);
         if (draft is null) return ToolResult.Error($"no draft with id {id}");
         if (draft.Kind == Draft.JoinKind && draft.Join is { } join) return await ApproveJoinAsync(draft, join, ct).ConfigureAwait(false);
+        if (draft.Kind == Draft.ForwardKind && draft.Forward is { } forward) return await ApproveForwardAsync(draft, forward, ct).ConfigureAwait(false);
         if (draft.Kind == Draft.ReactionKind && draft.Reaction is { } reaction) return await ApproveReactionAsync(draft, reaction, ct).ConfigureAwait(false);
         if (draft.Message is null) return ToolResult.Error($"draft {id} is malformed");
         return await _c.Runner.RunAsync("approve", [Need.Write], async token =>
@@ -73,6 +74,20 @@ public sealed class DraftCommands
                 JoinSupport.AuditReason(target, jd.Mode, $"draft {draft.Id} approved, {joined.Status}"));
         }, ct);
 
+    /// <summary>Performs a drafted forward after re-checking both chats and every message.</summary>
+    private Task<ToolResult> ApproveForwardAsync(Draft draft, PendingForward forward, CancellationToken ct) =>
+        _c.Runner.RunAsync("approve", [Need.Read, Need.Forward, Need.Write], async token =>
+        {
+            var source = await _c.Telegram.GetChatAsync(forward.FromChatId, token).ConfigureAwait(false);
+            var target = await _c.Telegram.GetChatAsync(forward.ToChatId, token).ConfigureAwait(false);
+            var gate = await ForwardGate.CheckAsync(_c, source, target, forward, token).ConfigureAwait(false);
+            if (gate.Denied is not null) return gate.Denied;
+            var done = await ForwardGate.ApplyAsync(_c.Telegram, forward, token).ConfigureAwait(false);
+            await _drafts.DeleteAsync(draft.Id, token).ConfigureAwait(false);
+            return ToolOutcome.Ok(done, target.Id, forward.MessageIds.Count, gate.Target!,
+                $"draft {draft.Id} approved, forwarded {forward.MessageIds.Count} message(s) from {source.Id}");
+        }, ct);
+
     /// <summary>Applies a drafted reaction after re-checking the policy and the available reactions.</summary>
     private Task<ToolResult> ApproveReactionAsync(Draft draft, PendingReaction reaction, CancellationToken ct) =>
         _c.Runner.RunAsync("approve", [Need.Read, Need.React, Need.Write], async token =>
@@ -91,7 +106,7 @@ public sealed class DraftCommands
         var draft = await _drafts.GetAsync(id, ct).ConfigureAwait(false);
         if (draft is null) return false;
         await _drafts.DeleteAsync(id, ct).ConfigureAwait(false);
-        _audit.Write(new AuditEntry(_c.Time.GetUtcNow(), "reject", draft.Message?.ChatId ?? draft.Join?.ChatId ?? draft.Reaction?.ChatId, 0, true, "owner", $"{draft.Kind} draft {id} rejected"));
+        _audit.Write(new AuditEntry(_c.Time.GetUtcNow(), "reject", draft.Message?.ChatId ?? draft.Join?.ChatId ?? draft.Reaction?.ChatId ?? draft.Forward?.ToChatId, 0, true, "owner", $"{draft.Kind} draft {id} rejected"));
         return true;
     }
 }

@@ -29,6 +29,11 @@ public static class DraftCommandsCli
                             output.WriteLine($"{d.Id}  {d.CreatedUtc.UtcDateTime:yyyy-MM-dd HH:mm}Z  JOIN {what} \"{d.ChatTitle}\" ({j.Type}, {j.MemberCount} members)");
                             continue;
                         }
+                        if (d.Kind == Draft.ForwardKind && d.Forward is { } f)
+                        {
+                            output.WriteLine($"{d.Id}  {d.CreatedUtc.UtcDateTime:yyyy-MM-dd HH:mm}Z  FORWARD {f.MessageIds.Count} message(s) from chat {f.FromChatId} to chat {f.ToChatId} \"{d.ChatTitle}\"{(f.SendCopy ? " (as copy)" : "")}");
+                            continue;
+                        }
                         if (d.Kind == Draft.ReactionKind && d.Reaction is { } r)
                         {
                             output.WriteLine($"{d.Id}  {d.CreatedUtc.UtcDateTime:yyyy-MM-dd HH:mm}Z  REACT {(r.Emoji ?? "(remove)")} on message {r.MessageId} in chat {r.ChatId} \"{d.ChatTitle}\"");

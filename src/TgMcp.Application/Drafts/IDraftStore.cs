@@ -14,9 +14,13 @@ namespace TgMcp.Application.Drafts;
 /// <param name="Kind">"message" or "join".</param>
 /// <param name="Join">The join to perform (kind "join").</param>
 /// <param name="Reaction">The reaction to set or remove (kind "reaction").</param>
+/// <param name="Forward">The forward to perform (kind "forward").</param>
 public sealed record Draft(string Id, DateTimeOffset CreatedUtc, string ChatTitle, OutgoingMessage? Message,
-    string Kind = Draft.MessageKind, PendingJoin? Join = null, PendingReaction? Reaction = null)
+    string Kind = Draft.MessageKind, PendingJoin? Join = null, PendingReaction? Reaction = null, PendingForward? Forward = null)
 {
+    /// <summary>Kind of a forward draft.</summary>
+    public const string ForwardKind = "forward";
+
     /// <summary>Kind of a reaction draft.</summary>
     public const string ReactionKind = "reaction";
 
@@ -26,6 +30,14 @@ public sealed record Draft(string Id, DateTimeOffset CreatedUtc, string ChatTitl
     /// <summary>Kind of a join draft.</summary>
     public const string JoinKind = "join";
 }
+
+/// <summary>A forward waiting for the owner's approval.</summary>
+/// <param name="FromChatId">Source chat.</param>
+/// <param name="MessageIds">Messages to forward.</param>
+/// <param name="ToChatId">Destination chat.</param>
+/// <param name="ToTopicId">Destination forum topic, if any.</param>
+/// <param name="SendCopy">Send copies without the "forwarded from" header.</param>
+public sealed record PendingForward(long FromChatId, IReadOnlyList<long> MessageIds, long ToChatId, int? ToTopicId, bool SendCopy);
 
 /// <summary>A reaction waiting for the owner's approval.</summary>
 /// <param name="ChatId">Chat id.</param>
@@ -53,6 +65,9 @@ public interface IDraftStore
 
     /// <summary>Saves a new join draft.</summary>
     Task<Draft> SaveJoinAsync(string chatTitle, PendingJoin join, CancellationToken ct);
+
+    /// <summary>Saves a new forward draft.</summary>
+    Task<Draft> SaveForwardAsync(string chatTitle, PendingForward forward, CancellationToken ct);
 
     /// <summary>Saves a new reaction draft.</summary>
     Task<Draft> SaveReactionAsync(string chatTitle, PendingReaction reaction, CancellationToken ct);
