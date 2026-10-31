@@ -29,6 +29,9 @@ public sealed class TelegramOptions
     /// <summary>Data root (default /data): tdlib/, files/, media/ live below it.</summary>
     public string DataDir { get; set; } = "/data";
 
+    /// <summary>TGMCP_UseTestDc: connect to Telegram's test data centers (separate accounts; for integration tests).</summary>
+    public bool UseTestDc { get; set; }
+
     /// <summary>Per-request timeout.</summary>
     public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(30);
 

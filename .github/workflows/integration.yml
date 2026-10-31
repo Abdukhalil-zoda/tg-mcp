@@ -1,0 +1,26 @@
+name: Integration tests (Telegram test DC)
+
+# Manually triggered. Runs tests/TgMcp.IntegrationTests against Telegram's TEST data centers with a
+# throwaway test account. Configure the repository secrets TGMCP_IT_API_ID, TGMCP_IT_API_HASH and
+# TGMCP_IT_PHONE (a 99966XYYYY test number). Without them every test is skipped.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-dc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Integration tests
+        env:
+          TGMCP_IT_ApiId: ${{ secrets.TGMCP_IT_API_ID }}
+          TGMCP_IT_ApiHash: ${{ secrets.TGMCP_IT_API_HASH }}
+          TGMCP_IT_Phone: ${{ secrets.TGMCP_IT_PHONE }}
+        run: dotnet test --project tests/TgMcp.IntegrationTests -c Release

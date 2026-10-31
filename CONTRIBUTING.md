@@ -31,9 +31,10 @@ docker run --rm -v "$PWD":/src -v "$PWD/.nuget":/root/.nuget/packages -w /src \
 docker build -t tgmcp:dev .
 ```
 
-Warnings are errors, analyzers run at `latest`, and public APIs need XML docs. Tests never start TDLib
-and never contact Telegram: tool behavior is tested against the fake client in
-`tests/TgMcp.Application.Tests/Fakes.cs`.
+Warnings are errors, analyzers run at `latest`, and public APIs need XML docs. Unit tests never start
+TDLib and never contact Telegram: tool behavior is tested against the fake client in
+`tests/TgMcp.Application.Tests/Fakes.cs`. The opt-in `tests/TgMcp.IntegrationTests` run real TDLib against
+Telegram's *test* DC only when `TGMCP_IT_*` variables are set (see README → Integration tests).
 
 Layers (keep them clean):
 

@@ -115,7 +115,7 @@ public sealed partial class TdSession : IAsyncDisposable
             Directory.CreateDirectory(_o.FilesDir);
             await _client.ExecuteAsync(new SetTdlibParameters
             {
-                UseTestDc = false,
+                UseTestDc = _o.UseTestDc,
                 DatabaseDirectory = _o.DatabaseDir,
                 FilesDirectory = _o.FilesDir,
                 DatabaseEncryptionKey = _o.ResolveDatabaseKey(),

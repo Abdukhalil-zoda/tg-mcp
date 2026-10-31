@@ -312,9 +312,26 @@ src/TgMcp.Server                  composition root: Generic Host, MCP stdio, CLI
 tests/TgMcp.Domain.Tests          policy and config tests
 tests/TgMcp.Application.Tests     tool gating against a fake Telegram client, retry, rate limit
 tests/TgMcp.Infrastructure.Tests  JSON config loading, config check, audit sink, media store (file system)
+tests/TgMcp.IntegrationTests      opt-in: real TDLib against Telegram's test DC (skipped without TGMCP_IT_* variables)
 ```
 
 Image: `mcr.microsoft.com/dotnet/runtime:11.0.0-rc.3`, framework-dependent publish for linux-x64 or linux-arm64 (the build stage cross-publishes, using `tdlib.native.linux-arm64` for arm64). Releases are built by `.github/workflows/release.yml` on `v*` tags and pushed to GHCR, with cosign keyless signing, an SBOM and a provenance attestation. The runtime image already ships the libraries `libtdjson.so` needs (libssl3, zlib, libstdc++), as checked with `ldd`. Self-contained or trimmed builds aren't used, because TDLib's JSON layer relies on reflection.
+
+### Integration tests (Telegram test DC)
+
+`tests/TgMcp.IntegrationTests` runs the real TDLib adapter against Telegram's **test data centers**: login state machine, send confirmation (final ids), history, search, and the inbound update stream. The test DC is a separate network with its own accounts, so no real account or chat is involved. Without credentials, all tests are skipped and `dotnet test` stays green.
+
+To get a test-DC account:
+1. Use your own `api_id`/`api_hash` from my.telegram.org. They work on the test DC too.
+2. Pick a test phone number `99966XYYYY`: `X` is the DC number (1–3) and `YYYY` is any four digits, e.g. `9996621234`. These numbers exist only on the test DC. No SMS is sent: the login code is `X` repeated five times (`22222` for DC 2). The first login registers the account automatically.
+3. Treat test accounts as public and disposable. Others may use the same number, and test DC data can be wiped at any time.
+
+```sh
+TGMCP_IT_ApiId=1234567 TGMCP_IT_ApiHash=your-api-hash TGMCP_IT_Phone=9996621234 \
+  dotnet test --project tests/TgMcp.IntegrationTests
+```
+
+In CI, the manually triggered workflow `.github/workflows/integration.yml` runs them with the repository secrets `TGMCP_IT_API_ID`, `TGMCP_IT_API_HASH` and `TGMCP_IT_PHONE`. The server can also run against the test DC with `TGMCP_UseTestDc=true` (an environment-only setting).
 
 ## Limitations
 

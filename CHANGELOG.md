@@ -6,6 +6,9 @@ and the project uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Opt-in integration tests against Telegram's test DC (`tests/TgMcp.IntegrationTests`: login, send
+  confirmation, history/search, inbound stream), skipped unless `TGMCP_IT_ApiId`/`TGMCP_IT_ApiHash`/
+  `TGMCP_IT_Phone` are set; manual workflow `integration.yml`; env-only `TGMCP_UseTestDc`.
 - `summarize_message(chat, message_id, translate_to?)` and `translate_message(chat, message_id, to_language)`:
   Telegram's built-in AI summary and translation (`summarizeMessage`, `translateMessageText`). Need
   `features.summarize` / `features.translate` and `read` + `"summarize"` / `"translate"`; usually require

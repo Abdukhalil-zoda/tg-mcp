@@ -101,7 +101,7 @@ public sealed class PolicyConfig
     /// <summary>Non-policy keys the process itself reads (environment only). Their values are never logged or hashed.</summary>
     public static readonly IReadOnlySet<string> RuntimeKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "ApiId", "ApiHash", "DatabaseKey", "DatabaseKeyFile", "AuditPath", "DataDir", "ConfigFile",
+        "ApiId", "ApiHash", "DatabaseKey", "DatabaseKeyFile", "AuditPath", "DataDir", "ConfigFile", "UseTestDc",
     };
 
     /// <summary>Secrets: refused in the config file.</summary>
