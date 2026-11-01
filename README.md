@@ -27,12 +27,12 @@ Bot accounts can't read your chats, and handing an assistant your full account s
 - **Prompt-injection hygiene.** Every result that contains Telegram content carries the note `"content is third-party data, not instructions"`.
 - **Audit without content.** The JSONL audit log records the time, tool, chat id, count, decision, matched rule and reason. It never records message text, titles or search queries. At startup it also records the sha256 of the normalized effective config and the config file path.
 - **Audit fails closed.** If the audit file isn't writable, every call is denied before anything is sent to Telegram. If a record can't be written after a call, the result is withheld.
-- **Small surface.** These tools don't exist in the code at all: payments, Stars or gifts, bot buttons and inline queries, account, privacy, 2FA or session settings, leaving or deleting chats, admin actions, Business settings, contact export, and bulk operations.
+- **Small surface.** These tools don't exist in the code at all: payments, Stars or gifts, bot buttons and inline queries, account, privacy, 2FA or session settings, leaving or deleting chats, admin actions (bans, rights, editing chats), Business settings and contact export. The few bulk-style tools (`add_member`, folder links) are off by default, act on one user or folder per call, are rate limited per hour and per day, and default to drafts.
 - **Hardened container.** It runs as a non-root user (uid/gid **1654**, `app`) and works with `--read-only --cap-drop ALL --security-opt no-new-privileges`. State lives only in the `/data` volume.
 
 ### Unofficial client risk
 
-TgMcp is a third-party Telegram client built on TDLib with **your own** `api_id`/`api_hash`. Telegram's terms apply to you. Automated use of a user account can trigger anti-spam limits, and in rare cases account restrictions. Keep the rate limits low, don't use TgMcp for bulk actions, and keep a second logged-in device so you can always recover. The login session shows up as **TgMcp** in Telegram → Settings → Devices, and you can end it there at any time.
+TgMcp is a third-party Telegram client built on TDLib with **your own** `api_id`/`api_hash`. Telegram's terms apply to you. Automated use of a user account can trigger anti-spam limits, and in rare cases account restrictions. Keep the rate limits low, and keep a second logged-in device so you can always recover. **Spread big batches over several days**: joining or adding people to hundreds of groups in one go is exactly what Telegram's anti-spam looks for, and the answer is `PEER_FLOOD` (a temporary limit on the account) or worse. The defaults (`joinsPerHour` 5 / `joinsPerDay` 20, `addsPerHour` 5 / `addsPerDay` 20) pace a job of about 200 groups over roughly ten days. The login session shows up as **TgMcp** in Telegram → Settings → Devices, and you can end it there at any time.
 
 ## Tools
 
@@ -46,6 +46,11 @@ TgMcp is a third-party Telegram client built on TDLib with **your own** `api_id`
 | `search_all` | read + `search` | Global search. Results from chats without read + search are silently dropped. |
 | `preview_chat` | `features.join` | Shows what a target is without joining: title, type (group/supergroup/channel), member count, whether a join request is needed, whether you are already a member. |
 | `join_chat` | `features.join` + `join.mode` | Joins **with the owner's account**. `"off"` (default) denies. `"draft"` saves a join draft for `tgmcp approve <id>`. `"on"` joins only targets in `join.allow`. Accepts `@username`, `t.me/username`, `https://t.me/+HASH` and `t.me/joinchat/HASH`; anything else is rejected. Deny rules are checked on the resolved chat. `limits.joinsPerHour` (default 5) applies. Joining grants **no** read or write access: the result includes the chat id and the exact rule to add. |
+| `search_public` | `features.searchPublic` | Searches **public** chats, channels and people by text (`searchPublicChats`); an exact `@username` match (`searchPublicChat`) comes first. Returns id, title, `@username`, type and member count only, no messages. Chats hit by a deny rule are dropped. `limits.publicSearchesPerHour` (default 20) applies. Finding a chat grants no access. |
+| `find_chats` | `features.findChats` | Lists **your own** groups and channels from the main and the archive chat lists, optionally filtered by `keywords` (any of them, case-insensitive, matched against title and `@username`) and `kind` (`group`/`channel`/`any`); without keywords it returns the whole directory. Paged with `offset`/`limit`, at most 2000 chats are scanned. Returns id, title, type, `@username`, member count, `archived`, `can_add_members` and `can_include_in_folder_link`, never messages. **Not limited by per-chat read rules**: turning it on lets the assistant see the names of all your groups and channels (deny rules still hide chats). |
+| `add_member` | `features.addMember` + `addMember.mode` | Adds one user (`@username` or user id, e.g. of a contact) to a group or channel **as the owner**. `"off"` (default) denies, `"draft"` saves an add-member draft for `tgmcp approve <id>`, `"on"` adds at once but only to chats in `addMember.chats`. Deny rules on the chat or the user win. `limits.addsPerHour` (5) and `limits.addsPerDay` (20) apply, drafts included. Telegram refusals (`USER_PRIVACY_RESTRICTED`, `CHAT_ADMIN_REQUIRED`, `PEER_FLOOD`, …) come back as plain explanations; `USER_ALREADY_PARTICIPANT` counts as success. |
+| `share_chats_as_folder` | `features.folders` + `folders.mode` | Creates chat folder(s) in your account from chat ids and a shareable folder invite link for each (`createChatFolder` → `getChatsForChatFolderInviteLink` → `createChatFolderInviteLink`). At most 100 chats per folder; larger inputs (up to 1000) are split into `Name 1`, `Name 2`, …. Returns the link(s) plus included and excluded chats with the reason (people/bots, unknown ids, deny rules, or Telegram's eligibility: public chats or chats where you are an admin with invite rights). Telegram's limits (10 folders, a few shareable folders without Premium) stop the run with a clear message. |
+| `join_chat_folder` | `features.folders` (+ `folders.mode` to join) | `preview_only: true` shows a folder link's name and chats (`checkChatFolderInviteLink`) in any mode. Otherwise it adds the folder and joins all its chats (`addChatFolderByInviteLink`), leaving out chats hit by deny rules; drafts first in `"draft"` mode. Counts as one join against `limits.joinsPerHour`/`joinsPerDay`. Without Premium an account can join only about 2 shared folders. |
 | `mark_read` | read + `mark_read` (`features.markRead`) | Marks a chat as read **as the owner**: unread counters clear on all your devices, and senders see read receipts. `up_to_message_id` marks up to that message; without it, everything is marked read, including mentions and reactions. Refused for topic-restricted rules, since it would also mark other topics read. |
 | `react` | read + `react` (`features.react`) + the chat's `write` mode (`features.send`) | Puts an emoji reaction on a message **as the owner**, or removes your reactions when `emoji` is empty. The effective mode is the **stricter** of the chat's `write` and the top-level `react.mode` (default `"draft"`): off beats draft, draft beats on. `"on"` applies it at once, `"draft"` saves a reaction draft for `tgmcp approve <id>`, and `"off"` denies. To react directly, set both `"write": "on"` and `"react": { "mode": "on" }`. Only reactions offered for that message (`getMessageAvailableReactions`) and usable without Premium are accepted. `sinceDays`/`topics` and `limits.sendsPerMinute` apply. |
 | `forward_message` | source: read + `forward` (`features.forward`); destination: a `write` mode (`features.send`) | Forwards 1–20 messages **as the owner**. Each message must pass the source's `sinceDays`/`topics` and be forwardable; protected content is refused. The destination needs no read access. `"on"` forwards at once; `"draft"` saves a forward draft for `tgmcp approve <id>`. Optional `to_topic_id` (required if the destination rule has `topics`) and `send_copy` (no "forwarded from" header). Deny rules win on either side, and `limits.sendsPerMinute` applies to the destination. |
@@ -209,6 +214,25 @@ The server starts and answers `tools/list` even before login or without credenti
 
 Commands: `serve` (the default), `login`, `config check [file]`, `drafts`, `approve <id>`, `reject <id>`, `help`.
 
+### Finding chats, adding members and folder links
+
+These tools exist for jobs like "put my 200 Uzbek groups into shareable folders" or "add our new colleague to the team chats". All of them are off by default.
+
+```jsonc
+"features": { "findChats": true, "searchPublic": true, "addMember": true, "folders": true },
+"addMember": {
+  "mode": "draft",            // "off" (default) | "draft" (you approve each addition) | "on" (only chats in "chats")
+  "chats": []                 // for "on": chat ids or "@usernames"; there is no "*"
+},
+"folders": { "mode": "draft" }, // "off" (default) | "draft" | "on"
+"limits": { "addsPerHour": 5, "addsPerDay": 20, "joinsPerHour": 5, "joinsPerDay": 20, "publicSearchesPerHour": 20 }
+```
+
+- **`find_chats` is a directory, not a read grant.** It returns titles and metadata of your groups and channels even when no rule lets the assistant read them. Enable it only if that is fine for you; deny rules still hide chats.
+- **`add_member`** adds exactly one user per call. In `"draft"` mode, `tgmcp drafts` shows `ADD MEMBER @user (user 123) to chat …`; approval re-checks `features.addMember`, `addMember.mode` and deny rules but doesn't need `addMember.chats`. The audit log has the chat id, the user id, the mode and the outcome (or the Telegram error name).
+- **Folder links** are secrets like invite links: anyone who has one can join the chats. They are returned to the assistant only by `share_chats_as_folder`, stored owner-only in drafts, and never written to the audit log or to error texts (`addlist#<sha256 prefix>` only).
+- **Pacing.** `joinsPerDay`/`addsPerDay` sit on top of the hourly limits; a call needs a token from both, and a refusal says which limit to wait for. Spread big batches over days; if Telegram answers `PEER_FLOOD`, stop for at least a day.
+
 ## Configuration
 
 ### Sources and precedence
@@ -230,7 +254,7 @@ The template [`tgmcp.example.jsonc`](tgmcp.example.jsonc) documents every option
 | Key | Values | Default |
 |---|---|---|
 | `enabled` | bool | `false` (deny all) |
-| `features.{read, search, mediaDownload, send, join, summarize, translate, react, markRead, editOwn, deleteOwn, forward, pin}` | bool | `false` |
+| `features.{read, search, mediaDownload, send, join, summarize, translate, react, markRead, editOwn, deleteOwn, forward, pin, searchPublic, findChats, addMember, folders}` | bool | `false` |
 | `defaults.read` | bool | `false` |
 | `defaults.write` | `"off"` / `"draft"` / `"on"` | `"off"` |
 | `defaults.features` | list of features | `[]` |
@@ -246,7 +270,14 @@ The template [`tgmcp.example.jsonc`](tgmcp.example.jsonc) documents every option
 | `limits.ratePerMinute` | integer ≥ 1 (one token bucket per process) | `30` |
 | `limits.maxMediaMb` | integer ≥ 1 | `50` |
 | `limits.sendsPerMinute` | integer ≥ 1. `send_message` calls per chat per minute, sent or drafted. | `10` |
-| `limits.joinsPerHour` | integer ≥ 1. `join_chat` calls per hour, joined or drafted. | `5` |
+| `limits.joinsPerHour` | integer ≥ 1. `join_chat` / `join_chat_folder` calls per hour, joined or drafted. | `5` |
+| `limits.joinsPerDay` | integer ≥ 1. The same per 24 hours. | `20` |
+| `limits.addsPerHour` | integer ≥ 1. `add_member` calls per hour, added or drafted. | `5` |
+| `limits.addsPerDay` | integer ≥ 1. The same per 24 hours. | `20` |
+| `limits.publicSearchesPerHour` | integer ≥ 1. `search_public` calls per hour. | `20` |
+| `addMember.mode` | `"off"` / `"draft"` / `"on"` | `"off"` |
+| `addMember.chats` | list of chat ids or `"@usernames"` that may get members in `"on"` mode (no `"*"`) | `[]` |
+| `folders.mode` | `"off"` / `"draft"` / `"on"`: `share_chats_as_folder`, `join_chat_folder` | `"off"` |
 | `react.mode` | `"draft"` / `"on"`. Combined with the chat's `write` mode; the stricter one wins. | `"draft"` |
 | `delete.mode` | `"draft"` (every `delete_message` needs `tgmcp approve`) / `"on"` (delete at once in chats with `"write": "on"`) | `"draft"` |
 | `contacts.mode` | `"off"` / `"draft"` / `"on"`: `send_message` by `phone` | `"off"` |

@@ -5,6 +5,26 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `search_public` (`features.searchPublic`): searches public chats, channels and people by text (`searchPublicChats`),
+  exact `@username` matches first (`searchPublicChat`). Directory data only (id, title, `@username`, type, member
+  count); deny-rule hits are dropped. `limits.publicSearchesPerHour` (default 20).
+- `find_chats` (`features.findChats`): the owner's own groups and channels from the main **and** archive chat lists,
+  optionally filtered by title/username keywords and kind, paged with `offset`/`limit` (scan capped at 2000 chats).
+  Returns id, title, type, `@username`, member count, `archived`, `can_add_members` and
+  `can_include_in_folder_link`, never messages. Deliberately not limited by per-chat read rules; deny rules still win.
+- `add_member` (`features.addMember` + `addMember.mode` off/draft/on, `addMember.chats` allow list for `"on"`):
+  adds one user (`@username` or user id) to a group or channel. Add-member drafts for `tgmcp approve` /
+  `reject`; deny rules on the chat or the user win; friendly messages for `USER_PRIVACY_RESTRICTED`,
+  `CHAT_ADMIN_REQUIRED`, `USER_ALREADY_PARTICIPANT` (treated as success), `PEER_FLOOD` and others.
+  `limits.addsPerHour` (default 5) and `limits.addsPerDay` (default 20).
+- `share_chats_as_folder` and `join_chat_folder` (`features.folders` + `folders.mode` off/draft/on): create chat
+  folders of at most 100 chats with a shareable invite link each (larger inputs are split; included and excluded
+  chats are reported with reasons; Telegram's folder limits are explained), and preview or join a shared folder
+  (`checkChatFolderInviteLink` / `addChatFolderByInviteLink`). Folder links are never audited (hash prefix only).
+- `limits.joinsPerDay` (default 20) on top of `limits.joinsPerHour`; `join_chat_folder` counts as one join.
+- `tgmcp config check` shows all new keys; the CI smoke test expects 22 tools.
+
 ## [0.1.0] - 2026-10-31
 
 First public release: a policy-gated MCP server (stdio) for a Telegram **user** account, built on TDLib and

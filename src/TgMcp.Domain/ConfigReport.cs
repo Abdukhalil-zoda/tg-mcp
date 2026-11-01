@@ -45,7 +45,8 @@ public static class ConfigReport
         static string B(bool b) => b ? "true" : "false";
         yield return ("enabled", "enabled", B(c.Enabled));
         foreach (var s in Enum.GetValues<GlobalSwitch>())
-            yield return ($"features:{s}", $"features.{Names.Camel(s)}", B(c.Switches.Contains(s)));
+            yield return ($"features:{s}", $"features.{Names.Camel(s)}", B(c.Switches.Contains(s))
+                + (s == GlobalSwitch.FindChats && c.Switches.Contains(s) ? " (lists your groups/channels by title regardless of per-chat read rules; deny rules still hide chats)" : ""));
         yield return ("defaults:read", "defaults.read", B(c.DefaultRead));
         yield return ("defaults:write", "defaults.write", Names.Snake(c.DefaultWrite));
         yield return ("defaults:features", "defaults.features", Features(c.DefaultFeatures));
@@ -66,6 +67,13 @@ public static class ConfigReport
         yield return ("join:allow", "join.allow", c.JoinAllow.Count == 0 ? "[]" : "[" + string.Join(", ", c.JoinAllow) + "]"
             + (c.JoinAllow.Any(a => a.Any) ? " (WARNING: \"*\" allows joining anything)" : ""));
         yield return ("limits:joinsPerHour", "limits.joinsPerHour", c.JoinsPerHour.ToString(CultureInfo.InvariantCulture));
+        yield return ("limits:joinsPerDay", "limits.joinsPerDay", c.JoinsPerDay.ToString(CultureInfo.InvariantCulture));
+        yield return ("addMember:mode", "addMember.mode", Names.Snake(c.AddMemberMode));
+        yield return ("addMember:chats", "addMember.chats", c.AddMemberChats.Count == 0 ? "[]" : "[" + string.Join(", ", c.AddMemberChats) + "]");
+        yield return ("folders:mode", "folders.mode", Names.Snake(c.FoldersMode));
+        yield return ("limits:addsPerHour", "limits.addsPerHour", c.AddsPerHour.ToString(CultureInfo.InvariantCulture));
+        yield return ("limits:addsPerDay", "limits.addsPerDay", c.AddsPerDay.ToString(CultureInfo.InvariantCulture));
+        yield return ("limits:publicSearchesPerHour", "limits.publicSearchesPerHour", c.PublicSearchesPerHour.ToString(CultureInfo.InvariantCulture));
         yield return ("defaults:notify", "defaults.notify", B(c.DefaultNotify));
         yield return ("events:enabled", "events.enabled", B(c.EventsEnabled));
         yield return ("events:includeOutgoing", "events.includeOutgoing", B(c.EventsIncludeOutgoing));

@@ -29,6 +29,22 @@ public static class DraftCommandsCli
                             output.WriteLine($"{d.Id}  {d.CreatedUtc.UtcDateTime:yyyy-MM-dd HH:mm}Z  JOIN {what} \"{d.ChatTitle}\" ({j.Type}, {j.MemberCount} members)");
                             continue;
                         }
+                        if (d.Kind == Draft.AddMemberKind && d.AddMember is { } am)
+                        {
+                            output.WriteLine($"{d.Id}  {d.CreatedUtc.UtcDateTime:yyyy-MM-dd HH:mm}Z  ADD MEMBER {am.UserLabel} (user {am.UserId}) to chat {am.ChatId} \"{d.ChatTitle}\"");
+                            continue;
+                        }
+                        if (d.Kind == Draft.ShareFolderKind && d.ShareFolder is { } sf)
+                        {
+                            var parts = (sf.ChatIds.Count + 99) / 100;
+                            output.WriteLine($"{d.Id}  {d.CreatedUtc.UtcDateTime:yyyy-MM-dd HH:mm}Z  SHARE FOLDER \"{sf.Name}\" with {sf.ChatIds.Count} chat(s) ({parts} folder link(s))");
+                            continue;
+                        }
+                        if (d.Kind == Draft.JoinFolderKind && d.JoinFolder is { } jf)
+                        {
+                            output.WriteLine($"{d.Id}  {d.CreatedUtc.UtcDateTime:yyyy-MM-dd HH:mm}Z  JOIN FOLDER \"{jf.FolderName}\" ({jf.Link.AuditRef}, {jf.ChatCount} chat(s) to join)");
+                            continue;
+                        }
                         if (d.Kind == Draft.PhoneKind && d.Phone is { } ph)
                         {
                             var body = ph.Text.ReplaceLineEndings(" ");

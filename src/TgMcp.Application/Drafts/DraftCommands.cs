@@ -41,6 +41,9 @@ public sealed class DraftCommands
                 return outcome;
             }, ct).ConfigureAwait(false);
         }
+        if (draft.Kind == Draft.AddMemberKind && draft.AddMember is { } add) return await ApproveAddMemberAsync(draft, add, ct).ConfigureAwait(false);
+        if (draft.Kind == Draft.ShareFolderKind && draft.ShareFolder is { } share) return await ApproveShareFolderAsync(draft, share, ct).ConfigureAwait(false);
+        if (draft.Kind == Draft.JoinFolderKind && draft.JoinFolder is { } joinFolder) return await ApproveJoinFolderAsync(draft, joinFolder, ct).ConfigureAwait(false);
         if (draft.Kind == Draft.EditKind && draft.Edit is { } edit) return await ApproveEditAsync(draft, edit, ct).ConfigureAwait(false);
         if (draft.Kind == Draft.DeleteKind && draft.Delete is { } delete) return await ApproveDeleteAsync(draft, delete, ct).ConfigureAwait(false);
         if (draft.Kind == Draft.ForwardKind && draft.Forward is { } forward) return await ApproveForwardAsync(draft, forward, ct).ConfigureAwait(false);
@@ -84,6 +87,59 @@ public sealed class DraftCommands
             await _drafts.DeleteAsync(draft.Id, token).ConfigureAwait(false);
             return new ToolOutcome(ToolResult.Ok(JoinChatTool.Result(joined, preview)), joined.ChatId, 1, true, "owner",
                 JoinSupport.AuditReason(target, jd.Mode, $"draft {draft.Id} approved, {joined.Status}"));
+        }, ct);
+
+    /// <summary>
+    /// Adds a drafted member. Re-checks features.addMember, addMember.mode (not "off") and deny rules on the chat and the
+    /// user; addMember.chats is not required because the owner approves this specific addition.
+    /// </summary>
+    private Task<ToolResult> ApproveAddMemberAsync(Draft draft, PendingAddMember add, CancellationToken ct) =>
+        _c.Runner.RunAsync("approve", [Need.AddMember], async token =>
+        {
+            var target = await _c.Telegram.GetChatAsync(add.ChatId, token).ConfigureAwait(false);
+            var ad = _c.Policy.CheckAddMember(target.Info);
+            if (ad.Global is not null || ad.Mode == WriteMode.Off)
+            {
+                return new ToolOutcome(ToolResult.Error(AddMemberSupport.Denied(ad, _c.Policy.Config, target)), target.Id, 0, false, "add_member",
+                    AddMemberSupport.AuditReason(add.UserId, ad.Mode, "approve denied: " + ad.Reason));
+            }
+            var user = await _c.Telegram.GetUserAsync(add.UserId, token).ConfigureAwait(false)
+                ?? throw new ArgumentException("the user of this draft is no longer known to the account", nameof(draft));
+            if (AddMemberSupport.HardDenied(_c.Policy, target, user))
+                return new ToolOutcome(ToolResult.Error(Denials.HardDeny), target.Id, 0, false, "deny", AddMemberSupport.AuditReason(user.Id, ad.Mode, "approve denied by rule"));
+            var outcome = await AddMemberSupport.AddAsync(_c, target, user, ad.Mode, "owner", $"draft {draft.Id} approved, ", token).ConfigureAwait(false);
+            if (!outcome.Result.IsError) await _drafts.DeleteAsync(draft.Id, token).ConfigureAwait(false);
+            return outcome;
+        }, ct);
+
+    /// <summary>Creates the drafted folder link(s) after re-checking features.folders, folders.mode and deny rules.</summary>
+    private Task<ToolResult> ApproveShareFolderAsync(Draft draft, PendingShareFolder share, CancellationToken ct) =>
+        _c.Runner.RunAsync("approve", [Need.Folders], async token =>
+        {
+            var fd = _c.Policy.CheckFolders();
+            if (!fd.Allowed)
+            {
+                return new ToolOutcome(ToolResult.Error(FolderSupport.Denied(fd, _c.Policy.Config)), null, 0, false, "folders",
+                    $"{share.ChatIds.Count} chat(s), approve denied: {fd.Reason}");
+            }
+            var outcome = await FolderSupport.ShareAsync(_c, share.Name, share.ChatIds, "owner", $"draft {draft.Id} approved, ", token).ConfigureAwait(false);
+            if (!outcome.Result.IsError) await _drafts.DeleteAsync(draft.Id, token).ConfigureAwait(false);
+            return outcome;
+        }, ct);
+
+    /// <summary>Joins the drafted folder after re-checking features.folders, folders.mode and deny rules on its chats.</summary>
+    private Task<ToolResult> ApproveJoinFolderAsync(Draft draft, PendingJoinFolder join, CancellationToken ct) =>
+        _c.Runner.RunAsync("approve", [Need.Folders], async token =>
+        {
+            var fd = _c.Policy.CheckFolders();
+            if (!fd.Allowed)
+            {
+                return new ToolOutcome(ToolResult.Error(FolderSupport.Denied(fd, _c.Policy.Config)), null, 0, false, "folders",
+                    $"{join.Link.AuditRef}, approve denied: {fd.Reason}");
+            }
+            var outcome = await FolderSupport.JoinAsync(_c, join.Link, fd.Mode, "owner", $"draft {draft.Id} approved, ", token).ConfigureAwait(false);
+            if (!outcome.Result.IsError) await _drafts.DeleteAsync(draft.Id, token).ConfigureAwait(false);
+            return outcome;
         }, ct);
 
     /// <summary>Applies a drafted edit after re-checking the policy, the sent-log and editability.</summary>
@@ -144,7 +200,7 @@ public sealed class DraftCommands
         var draft = await _drafts.GetAsync(id, ct).ConfigureAwait(false);
         if (draft is null) return false;
         await _drafts.DeleteAsync(id, ct).ConfigureAwait(false);
-        _audit.Write(new AuditEntry(_c.Time.GetUtcNow(), "reject", draft.Message?.ChatId ?? draft.Join?.ChatId ?? draft.Reaction?.ChatId ?? draft.Forward?.ToChatId ?? draft.Edit?.ChatId ?? draft.Delete?.ChatId, 0, true, "owner", $"{draft.Kind} draft {id} rejected"));
+        _audit.Write(new AuditEntry(_c.Time.GetUtcNow(), "reject", draft.Message?.ChatId ?? draft.Join?.ChatId ?? draft.AddMember?.ChatId ?? draft.Reaction?.ChatId ?? draft.Forward?.ToChatId ?? draft.Edit?.ChatId ?? draft.Delete?.ChatId, 0, true, "owner", $"{draft.Kind} draft {id} rejected"));
         return true;
     }
 }

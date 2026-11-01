@@ -66,6 +66,11 @@
     "deleteOwn": false,     // delete_message: only messages TgMcp itself sent; drafts unless "delete.mode" is "on" (see below)
     "summarize": false,     // summarize_message: Telegram's AI summary (usually needs Telegram Premium)
     "translate": false,     // translate_message: Telegram's translation (may need Telegram Premium)
+    "searchPublic": false,  // search_public: find PUBLIC chats, channels and people by text (directory data, no messages)
+    "findChats": false,     // find_chats: list YOUR groups/channels (main + archive) by title. NOT limited by per-chat
+                            // "read" rules (directory data only, no messages); "deny" rules still hide chats
+    "addMember": false,     // add_member: add people to groups/channels AS YOU (see "addMember" below)
+    "folders": false,       // share_chats_as_folder / join_chat_folder: chat folder links AS YOU (see "folders" below)
     // Reserved for later versions (accepted and validated, currently without effect):
     "pin": false,
   },
@@ -131,7 +136,11 @@
     "ratePerMinute": 30,         // tool calls per minute for the whole server, >= 1
     "maxMediaMb": 50,            // largest file download_media will fetch, >= 1
     "sendsPerMinute": 10,        // send_message calls (sent or drafted) per chat per minute, >= 1
-    "joinsPerHour": 5,           // join_chat calls (joined or drafted) per hour, >= 1
+    "joinsPerHour": 5,           // join_chat / join_chat_folder calls (joined or drafted) per hour, >= 1
+    "joinsPerDay": 20,           // the same per 24 hours, >= 1 (spread big batches over several days)
+    "addsPerHour": 5,            // add_member calls (added or drafted) per hour, >= 1
+    "addsPerDay": 20,            // the same per 24 hours, >= 1 (PEER_FLOOD risk: adding many people fast gets accounts limited)
+    "publicSearchesPerHour": 20, // search_public calls per hour, >= 1
     "newChatsPerDay": 3,         // messages to new people by phone (sent or drafted) per 24 hours, >= 1
     "mediaRetentionDays": 7,     // delete downloaded media older than N days; 0 = keep forever
   },
@@ -175,6 +184,29 @@
   "join": {
     "mode": "off",
     "allow": [],
+  },
+
+  // Adding people to groups/channels (needs "features.addMember": true). Each call adds ONE user (@username or
+  // user id) AS YOU. Adding many people quickly is a spam pattern: Telegram answers with PEER_FLOOD and may limit the account.
+  //   "off"   (default) add_member is denied
+  //   "draft" nothing is added; a draft waits for `tgmcp approve <id>` (or `tgmcp reject <id>`)
+  //   "on"    adds at once, but ONLY to chats listed in "chats" (ids or @usernames; there is no "*")
+  // Deny rules on the chat or on the person always win.
+  "addMember": {
+    "mode": "off",
+    "chats": [],
+  },
+
+  // Chat folder links (needs "features.folders": true).
+  //   share_chats_as_folder: creates folder(s) of at most 100 chats from chat ids and a shareable invite link each
+  //   join_chat_folder:      adds a shared folder (https://t.me/addlist/...) and joins all its chats
+  // Telegram limits without Premium: 10 folders, a few shareable folders, about 2 joined shared folders.
+  // Folder links are secrets: they are never written to the audit log (hash prefix only).
+  //   "off"   (default) denied (join_chat_folder with preview_only still works)
+  //   "draft" (recommended) nothing is created or joined until `tgmcp approve <id>`
+  //   "on"    created / joined at once
+  "folders": {
+    "mode": "off",
   },
 
   // Inbound events: new messages from chats with "notify": true are pushed into the assistant's session

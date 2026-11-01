@@ -124,6 +124,57 @@ public sealed record TgMessageProperties(bool CanBeForwarded, bool CanBeEdited, 
 /// <param name="Imported">True if a contact had to be imported to reach the user.</param>
 public sealed record TgPhoneChat(TgChat Chat, bool Imported);
 
+/// <summary>A public chat found by search_public (directory data only).</summary>
+/// <param name="Id">Chat id (for people and bots: the private chat id, equal to the user id).</param>
+/// <param name="Title">Title, or the person's name.</param>
+/// <param name="Usernames">Active public usernames, without '@'.</param>
+/// <param name="Kind">Policy chat kind (for deny rules).</param>
+/// <param name="Type">"private", "bot", "group", "supergroup" or "channel".</param>
+/// <param name="MemberCount">Member count (0 if unknown or not a group/channel).</param>
+public sealed record TgPublicChat(long Id, string Title, IReadOnlyList<string> Usernames, ChatKind Kind, string Type, int MemberCount)
+{
+    /// <summary>The policy view of this chat.</summary>
+    public ChatInfo Info => new(Id, Title, Usernames, Kind);
+}
+
+/// <summary>One of the owner's groups or channels, as listed by find_chats (no messages).</summary>
+/// <param name="Id">Chat id.</param>
+/// <param name="Title">Chat title.</param>
+/// <param name="Usernames">Active public usernames, without '@'.</param>
+/// <param name="Kind">Policy chat kind (group or channel).</param>
+/// <param name="Type">"group", "supergroup" or "channel".</param>
+/// <param name="MemberCount">Member count (0 if unknown).</param>
+/// <param name="Archived">True if the chat is in the archive chat list.</param>
+/// <param name="CanAddMembers">True if the owner may add members (admin right or the chat's member permissions).</param>
+/// <param name="CanCreateInviteLinks">True if the owner is the creator or an admin with the invite-users right.</param>
+public sealed record TgDirectoryChat(long Id, string Title, IReadOnlyList<string> Usernames, ChatKind Kind, string Type, int MemberCount,
+    bool Archived, bool CanAddMembers, bool CanCreateInviteLinks = false)
+{
+    /// <summary>True if the chat could go into a shareable folder link: it is public or the owner can create invite links.</summary>
+    public bool CanIncludeInFolderLink => Usernames.Count > 0 || CanCreateInviteLinks;
+
+    /// <summary>The policy view of this chat.</summary>
+    public ChatInfo Info => new(Id, Title, Usernames, Kind);
+}
+
+/// <summary>A Telegram user, as needed to add them to a chat.</summary>
+/// <param name="Id">User id (also the id of the private chat with them).</param>
+/// <param name="Name">Display name.</param>
+/// <param name="Username">First active username, if any.</param>
+/// <param name="IsBot">True for bot accounts.</param>
+public sealed record TgUser(long Id, string Name, string? Username, bool IsBot)
+{
+    /// <summary>The policy view of the private chat with this user (for deny rules).</summary>
+    public ChatInfo Info => new(Id, Name, Username, IsBot ? ChatKind.Bot : ChatKind.Private);
+}
+
+/// <summary>What a chat folder link contains (checkChatFolderInviteLink), without joining.</summary>
+/// <param name="Name">Folder name.</param>
+/// <param name="AlreadyAdded">True if the owner already has this folder.</param>
+/// <param name="MissingChatIds">Chats of the folder the owner has not joined yet.</param>
+/// <param name="AddedChatIds">Chats of the folder the owner is already in.</param>
+public sealed record TgFolderPreview(string Name, bool AlreadyAdded, IReadOnlyList<long> MissingChatIds, IReadOnlyList<long> AddedChatIds);
+
 /// <summary>Telegram is not usable right now (no credentials, not logged in, closed).</summary>
 /// <param name="message">Reason, safe to show to the client.</param>
 public sealed class TelegramUnavailableException(string message) : Exception(message);
@@ -227,6 +278,48 @@ public interface ITelegramClient
     /// is not on Telegram or the user hides it.
     /// </summary>
     Task<TgPhoneChat?> ResolvePhoneAsync(string e164, string contactName, CancellationToken ct);
+
+    /// <summary>Public chats, channels and users matching <paramref name="query"/> (searchPublicChats), at most <paramref name="limit"/>.</summary>
+    Task<IReadOnlyList<TgPublicChat>> SearchPublicChatsAsync(string query, int limit, CancellationToken ct);
+
+    /// <summary>The public chat or user with exactly this username (searchPublicChat); null if there is none.</summary>
+    Task<TgPublicChat?> FindPublicChatAsync(string username, CancellationToken ct);
+
+    /// <summary>
+    /// The owner's groups and channels from the main and the archive chat lists (loadChats/getChats), scanning at most
+    /// <paramref name="maxChats"/> chats in total. Private chats are skipped.
+    /// </summary>
+    Task<IReadOnlyList<TgDirectoryChat>> ScanGroupsAsync(int maxChats, CancellationToken ct);
+
+    /// <summary>A user known to the owner's account (contacts, chat members already seen); null if unknown.</summary>
+    Task<TgUser?> GetUserAsync(long userId, CancellationToken ct);
+
+    /// <summary>The user with this public username; null if there is none or the username is not a user's.</summary>
+    Task<TgUser?> FindUserAsync(string username, CancellationToken ct);
+
+    /// <summary>
+    /// Adds a user to a group or channel (addChatMember). Telegram refusals, including users that could not be added
+    /// for privacy reasons, are thrown as <see cref="TelegramCallException"/> with the Telegram error name in the message.
+    /// </summary>
+    Task AddChatMemberAsync(long chatId, long userId, CancellationToken ct);
+
+    /// <summary>Creates a chat folder that contains exactly <paramref name="chatIds"/> (createChatFolder); returns its id.</summary>
+    Task<int> CreateChatFolderAsync(string name, IReadOnlyList<long> chatIds, CancellationToken ct);
+
+    /// <summary>Chats of a folder that may go into an invite link (getChatsForChatFolderInviteLink).</summary>
+    Task<IReadOnlyList<long>> GetChatsForFolderLinkAsync(int folderId, CancellationToken ct);
+
+    /// <summary>Creates an invite link for a folder (createChatFolderInviteLink); returns the link. The link is a secret: never log it.</summary>
+    Task<string> CreateFolderLinkAsync(int folderId, IReadOnlyList<long> chatIds, CancellationToken ct);
+
+    /// <summary>Deletes a chat folder without leaving its chats (deleteChatFolder).</summary>
+    Task DeleteChatFolderAsync(int folderId, CancellationToken ct);
+
+    /// <summary>What a folder link contains (checkChatFolderInviteLink).</summary>
+    Task<TgFolderPreview> CheckFolderLinkAsync(FolderLink link, CancellationToken ct);
+
+    /// <summary>Adds the folder and joins <paramref name="chatIds"/> from it (addChatFolderByInviteLink).</summary>
+    Task AddFolderByLinkAsync(FolderLink link, IReadOnlyList<long> chatIds, CancellationToken ct);
 
     /// <summary>Chat folder title to the ids of the chats currently in that folder.</summary>
     Task<IReadOnlyDictionary<string, IReadOnlySet<long>>> GetFolderChatsAsync(CancellationToken ct);

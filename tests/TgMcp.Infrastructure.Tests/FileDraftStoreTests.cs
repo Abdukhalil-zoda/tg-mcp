@@ -97,3 +97,31 @@ public class FileDraftStoreTests
         Assert.StartsWith("TDLib could not open its database", TdTelegramClient.DatabaseProblem("Wrong password"), StringComparison.Ordinal);
     }
 }
+
+public class FileDraftStoreNewKindsTests
+{
+    private static CancellationToken Ct => TestContext.Current.CancellationToken;
+
+    [Fact]
+    public async Task Add_member_and_folder_drafts_round_trip()
+    {
+        using var dir = new TempDir();
+        var store = new FileDraftStore(Options.Create(new TelegramOptions { DataDir = dir.Path }), new FakeTimeProvider());
+        var add = new TgMcp.Application.Drafts.PendingAddMember(-1001234567890, 222, "@bob_user");
+        var a = await store.GetAsync((await store.SaveAddMemberAsync("Example Group", add, Ct)).Id, Ct);
+        Assert.Equal("add_member", a!.Kind);
+        Assert.Equal(add, a.AddMember);
+
+        var share = new TgMcp.Application.Drafts.PendingShareFolder("Uz", [-1001, -1002]);
+        var s = await store.GetAsync((await store.SaveShareFolderAsync(share, Ct)).Id, Ct);
+        Assert.Equal("share_folder", s!.Kind);
+        Assert.Equal("Uz", s.ShareFolder!.Name);
+        Assert.Equal(share.ChatIds, s.ShareFolder.ChatIds);
+
+        var join = new TgMcp.Application.Drafts.PendingJoinFolder("AbCdEfGh12", "Uz groups", 3);
+        var j = await store.GetAsync((await store.SaveJoinFolderAsync(join, Ct)).Id, Ct);
+        Assert.Equal("join_folder", j!.Kind);
+        Assert.Equal(join, j.JoinFolder);
+        Assert.Equal(3, (await store.ListAsync(Ct)).Count);
+    }
+}

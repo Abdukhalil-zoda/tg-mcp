@@ -53,6 +53,18 @@ public sealed class FileDraftStore : IDraftStore
     public Task<Draft> SaveReactionAsync(string chatTitle, PendingReaction reaction, CancellationToken ct) =>
         WriteAsync(new Draft(NewId(), _time.GetUtcNow(), chatTitle, null, Draft.ReactionKind, Reaction: reaction), ct);
 
+    /// <inheritdoc />
+    public Task<Draft> SaveAddMemberAsync(string chatTitle, PendingAddMember add, CancellationToken ct) =>
+        WriteAsync(new Draft(NewId(), _time.GetUtcNow(), chatTitle, null, Draft.AddMemberKind, AddMember: add), ct);
+
+    /// <inheritdoc />
+    public Task<Draft> SaveShareFolderAsync(PendingShareFolder share, CancellationToken ct) =>
+        WriteAsync(new Draft(NewId(), _time.GetUtcNow(), share.Name, null, Draft.ShareFolderKind, ShareFolder: share), ct);
+
+    /// <inheritdoc />
+    public Task<Draft> SaveJoinFolderAsync(PendingJoinFolder join, CancellationToken ct) =>
+        WriteAsync(new Draft(NewId(), _time.GetUtcNow(), join.FolderName, null, Draft.JoinFolderKind, JoinFolder: join), ct);
+
     private async Task<Draft> WriteAsync(Draft draft, CancellationToken ct)
     {
         EnsureDir();

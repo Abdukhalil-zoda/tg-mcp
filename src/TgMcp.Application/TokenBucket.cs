@@ -42,12 +42,27 @@ public sealed class TokenBucket : IRateLimiter
     {
         lock (_lock)
         {
-            var now = _time.GetTimestamp();
-            _tokens = Math.Min(_capacity, _tokens + (_time.GetElapsedTime(_last, now).TotalSeconds * _perSecond));
-            _last = now;
+            Refill();
             if (_tokens < 1) return false;
             _tokens -= 1;
             return true;
         }
+    }
+
+    /// <summary>True if a token is available now, without taking it.</summary>
+    public bool CanAcquire()
+    {
+        lock (_lock)
+        {
+            Refill();
+            return _tokens >= 1;
+        }
+    }
+
+    private void Refill()
+    {
+        var now = _time.GetTimestamp();
+        _tokens = Math.Min(_capacity, _tokens + (_time.GetElapsedTime(_last, now).TotalSeconds * _perSecond));
+        _last = now;
     }
 }

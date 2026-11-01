@@ -81,7 +81,14 @@ public static class Composition
         services.AddSingleton<IDraftStore, FileDraftStore>();
         services.AddSingleton<INewChatLimiter>(sp => new NewChatRateLimiter(sp.GetRequiredService<IPolicy>().Config.NewChatsPerDay, sp.GetRequiredService<TimeProvider>()));
         services.AddSingleton<SendMessageTool>();
-        services.AddSingleton<IJoinLimiter>(sp => new JoinRateLimiter(sp.GetRequiredService<IPolicy>().Config.JoinsPerHour, sp.GetRequiredService<TimeProvider>()));
+        services.AddSingleton<IJoinLimiter>(sp => new JoinRateLimiter(sp.GetRequiredService<IPolicy>().Config.JoinsPerHour, sp.GetRequiredService<IPolicy>().Config.JoinsPerDay, sp.GetRequiredService<TimeProvider>()));
+        services.AddSingleton<IAddMemberLimiter>(sp => new AddMemberRateLimiter(sp.GetRequiredService<IPolicy>().Config.AddsPerHour, sp.GetRequiredService<IPolicy>().Config.AddsPerDay, sp.GetRequiredService<TimeProvider>()));
+        services.AddSingleton<IPublicSearchLimiter>(sp => new PublicSearchRateLimiter(sp.GetRequiredService<IPolicy>().Config.PublicSearchesPerHour, sp.GetRequiredService<TimeProvider>()));
+        services.AddSingleton<AddMemberTool>();
+        services.AddSingleton<SearchPublicTool>();
+        services.AddSingleton<FindChatsTool>();
+        services.AddSingleton<ShareFolderTool>();
+        services.AddSingleton<JoinFolderTool>();
         services.AddSingleton<JoinChatTool>();
         services.AddSingleton<PreviewChatTool>();
         services.AddSingleton<MarkReadTool>();

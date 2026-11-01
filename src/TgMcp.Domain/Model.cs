@@ -89,6 +89,14 @@ public enum GlobalSwitch
     Pin,
     /// <summary>Joining groups/channels (join_chat, preview_chat).</summary>
     Join,
+    /// <summary>Searching public chats, channels and users by text (search_public).</summary>
+    SearchPublic,
+    /// <summary>Adding users to groups/channels (add_member; also needs addMember.mode).</summary>
+    AddMember,
+    /// <summary>Finding the owner's own groups/channels by title (find_chats; directory data only).</summary>
+    FindChats,
+    /// <summary>Chat folder links (share_chats_as_folder, join_chat_folder; also needs folders.mode).</summary>
+    Folders,
 }
 
 /// <summary>What a tool call needs from the policy.</summary>
@@ -122,6 +130,14 @@ public enum Need
     Pin,
     /// <summary>Join a group or channel (global switch features.join + join.mode).</summary>
     Join,
+    /// <summary>Search public chats (global switch features.searchPublic).</summary>
+    SearchPublic,
+    /// <summary>Add a member to a group or channel (global switch features.addMember + addMember.mode).</summary>
+    AddMember,
+    /// <summary>Find the owner's own groups/channels by title (global switch features.findChats).</summary>
+    FindChats,
+    /// <summary>Share or join chat folders by invite link (global switch features.folders + folders.mode).</summary>
+    Folders,
 }
 
 /// <summary>Which part of the policy produced a decision.</summary>
@@ -262,7 +278,7 @@ public static class Names
     /// <summary>The per-chat feature a need requires, or null for read/write needs.</summary>
     public static Feature? AsFeature(Need n) => n switch
     {
-        Need.Read or Need.Write or Need.WriteOn or Need.Join => null,
+        Need.Read or Need.Write or Need.WriteOn or Need.Join or Need.SearchPublic or Need.AddMember or Need.FindChats or Need.Folders => null,
         _ => Enum.Parse<Feature>(n.ToString()),
     };
 

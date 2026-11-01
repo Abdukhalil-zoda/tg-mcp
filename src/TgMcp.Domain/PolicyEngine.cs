@@ -48,6 +48,19 @@ public interface IPolicy
     /// (off: denied; draft / on: allowed) and the environment-only TGMCP_ContactsAllow list, which is required in every mode.
     /// </summary>
     JoinDecision CheckPhone(string e164);
+
+    /// <summary>
+    /// Whether add_member may add someone to <paramref name="chat"/> now: global gates and features.addMember, then
+    /// addMember.mode (off: denied; draft: allowed as a draft; on: only if addMember.chats names the chat). Deny rules
+    /// on the chat and on the user are checked separately with <see cref="Effective"/>.
+    /// </summary>
+    JoinDecision CheckAddMember(ChatInfo chat);
+
+    /// <summary>
+    /// Whether a chat folder may be shared or joined now: global gates and features.folders, then folders.mode
+    /// (off: denied; draft: allowed as a draft; on: allowed). Deny rules on the folder's chats are checked separately.
+    /// </summary>
+    JoinDecision CheckFolders();
 }
 
 /// <summary>Outcome of a join check.</summary>
@@ -205,6 +218,32 @@ public sealed class PolicyEngine : IPolicy
         return Config.ContactsAllow.Contains(e164)
             ? new JoinDecision(true, Config.ContactsMode, "allowed by TGMCP_ContactsAllow")
             : new JoinDecision(false, Config.ContactsMode, "number is not in TGMCP_ContactsAllow");
+    }
+
+    /// <inheritdoc />
+    public JoinDecision CheckAddMember(ChatInfo chat)
+    {
+        ArgumentNullException.ThrowIfNull(chat);
+        var g = CheckGlobal(Need.AddMember);
+        if (!g.Allowed) return new JoinDecision(false, Config.AddMemberMode, g.Reason, g);
+        return Config.AddMemberMode switch
+        {
+            WriteMode.Off => new JoinDecision(false, WriteMode.Off, "addMember.mode is off"),
+            WriteMode.Draft => new JoinDecision(true, WriteMode.Draft, "draft"),
+            _ when Config.AddMemberChats.Count == 0 => new JoinDecision(false, WriteMode.On, "addMember.chats is empty"),
+            _ when Config.AddMemberChats.Any(a => a.Matches(chat)) => new JoinDecision(true, WriteMode.On, "allowed by addMember.chats"),
+            _ => new JoinDecision(false, WriteMode.On, "chat is not in addMember.chats"),
+        };
+    }
+
+    /// <inheritdoc />
+    public JoinDecision CheckFolders()
+    {
+        var g = CheckGlobal(Need.Folders);
+        if (!g.Allowed) return new JoinDecision(false, Config.FoldersMode, g.Reason, g);
+        return Config.FoldersMode == WriteMode.Off
+            ? new JoinDecision(false, WriteMode.Off, "folders.mode is off")
+            : new JoinDecision(true, Config.FoldersMode, Names.Snake(Config.FoldersMode));
     }
 
     private string ConfigProblem() =>

@@ -168,6 +168,27 @@ public sealed class PolicyConfig
     /// <summary>limits.joinsPerHour: join_chat calls (joined or drafted) per hour.</summary>
     public int JoinsPerHour { get; private set; } = 5;
 
+    /// <summary>limits.joinsPerDay: join_chat calls (joined or drafted) per 24 hours, on top of joinsPerHour.</summary>
+    public int JoinsPerDay { get; private set; } = 20;
+
+    /// <summary>addMember.mode: off (default), draft (owner approves) or on (only chats in addMember.chats).</summary>
+    public WriteMode AddMemberMode { get; private set; } = WriteMode.Off;
+
+    /// <summary>addMember.chats: groups/channels members may be added to in mode "on" (ids or @usernames, no wildcard).</summary>
+    public IReadOnlyList<ChatRef> AddMemberChats { get; private set; } = [];
+
+    /// <summary>folders.mode: off (default), draft (owner approves each folder share/join) or on.</summary>
+    public WriteMode FoldersMode { get; private set; } = WriteMode.Off;
+
+    /// <summary>limits.addsPerHour: add_member calls (added or drafted) per hour.</summary>
+    public int AddsPerHour { get; private set; } = 5;
+
+    /// <summary>limits.addsPerDay: add_member calls (added or drafted) per 24 hours, on top of addsPerHour.</summary>
+    public int AddsPerDay { get; private set; } = 20;
+
+    /// <summary>limits.publicSearchesPerHour: search_public calls per hour.</summary>
+    public int PublicSearchesPerHour { get; private set; } = 20;
+
     /// <summary>join.mode: off (default), draft (owner approves) or on (only targets in join.allow).</summary>
     public WriteMode JoinMode { get; private set; } = WriteMode.Off;
 
@@ -291,7 +312,7 @@ public sealed class PolicyConfig
                 var parent = e.Key[..i];
                 var leaf = parent[(parent.LastIndexOf(':') + 1)..];
                 if (leaf.Equals("features", StringComparison.OrdinalIgnoreCase) || leaf.Equals("topics", StringComparison.OrdinalIgnoreCase)
-                    || leaf.Equals("allow", StringComparison.OrdinalIgnoreCase))
+                    || leaf.Equals("allow", StringComparison.OrdinalIgnoreCase) || parent.Equals("addMember:chats", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!lists.TryGetValue(parent, out var items)) lists[parent] = items = [];
                     items[idx] = e.Value!;
@@ -421,6 +442,10 @@ public sealed class PolicyConfig
                         case "maxmediamb": MaxMediaMb = Positive(key, value) ?? MaxMediaMb; break;
                         case "newchatsperday": NewChatsPerDay = Positive(key, value) ?? NewChatsPerDay; break;
                         case "joinsperhour": JoinsPerHour = Positive(key, value) ?? JoinsPerHour; break;
+                        case "joinsperday": JoinsPerDay = Positive(key, value) ?? JoinsPerDay; break;
+                        case "addsperhour": AddsPerHour = Positive(key, value) ?? AddsPerHour; break;
+                        case "addsperday": AddsPerDay = Positive(key, value) ?? AddsPerDay; break;
+                        case "publicsearchesperhour": PublicSearchesPerHour = Positive(key, value) ?? PublicSearchesPerHour; break;
                         case "sendsperminute": SendsPerMinute = Positive(key, value) ?? SendsPerMinute; break;
                         case "mediaretentiondays": MediaRetentionDays = NonNegative(key, value) ?? MediaRetentionDays; break;
                         default: Unknown(key); break;
@@ -433,6 +458,18 @@ public sealed class PolicyConfig
                         case "allow": JoinAllow = AllowList(key, value); break;
                         default: Unknown(key); break;
                     }
+                    break;
+                case "addmember" when p.Length == 2:
+                    switch (p[1].ToLowerInvariant())
+                    {
+                        case "mode": AddMemberMode = Write(key, value) ?? WriteMode.Off; break;
+                        case "chats": AddMemberChats = ChatRefList(key, value); break;
+                        default: Unknown(key); break;
+                    }
+                    break;
+                case "folders" when p.Length == 2:
+                    if (p[1].Equals("mode", StringComparison.OrdinalIgnoreCase)) FoldersMode = Write(key, value) ?? WriteMode.Off;
+                    else Unknown(key);
                     break;
                 case "delete" when p.Length == 2:
                     if (p[1].Equals("mode", StringComparison.OrdinalIgnoreCase))
@@ -672,6 +709,18 @@ public sealed class PolicyConfig
         return list;
     }
 
+    private List<ChatRef> ChatRefList(string key, string v)
+    {
+        var list = new List<ChatRef>();
+        foreach (var item in Split(v))
+        {
+            if (ChatRef.TryParse(item, out var e)) list.Add(e!);
+            else if (item == "*") _errors.Add($"{key}: \"*\" is not allowed; list each group or channel by id or @username");
+            else _errors.Add($"{key}: '{item}' is not a chat id or @username");
+        }
+        return list;
+    }
+
     /// <summary>Invite hashes are secrets of a kind: never echo them in errors.</summary>
     private static string Redact(string item) => item.Contains('+', StringComparison.Ordinal) || item.Contains("joinchat", StringComparison.OrdinalIgnoreCase)
         ? "(invite " + JoinTarget.HashPrefix(item) + ")"
@@ -695,11 +744,13 @@ public sealed class PolicyConfig
         foreach (var r in Chats)
             sb.Append($"{r.Label} read={r.Read?.ToString().ToLowerInvariant() ?? "-"} write={(r.Write is WriteMode w ? Names.Snake(w) : "-")} features={F(r.Features)} since_days={r.SinceDays?.ToString(CultureInfo.InvariantCulture) ?? "-"} topics={(r.Topics is null ? "-" : string.Join(",", r.Topics.Order()))} notify={r.Notify?.ToString().ToLowerInvariant() ?? "-"}\n");
         foreach (var d in Denies) sb.Append($"{d.Label}\n");
-        sb.Append($"limits list_chats={Names.Snake(ListChats)} max_messages_per_call={MaxMessagesPerCall} rate_per_minute={RatePerMinute} max_media_mb={MaxMediaMb} media_retention_days={MediaRetentionDays} sends_per_minute={SendsPerMinute} joins_per_hour={JoinsPerHour}\n");
+        sb.Append($"limits list_chats={Names.Snake(ListChats)} max_messages_per_call={MaxMessagesPerCall} rate_per_minute={RatePerMinute} max_media_mb={MaxMediaMb} media_retention_days={MediaRetentionDays} sends_per_minute={SendsPerMinute} joins_per_hour={JoinsPerHour} joins_per_day={JoinsPerDay} adds_per_hour={AddsPerHour} adds_per_day={AddsPerDay} public_searches_per_hour={PublicSearchesPerHour}\n");
         sb.Append($"delete mode={Names.Snake(DeleteMode)}\n");
         sb.Append($"react mode={Names.Snake(ReactMode)}\n");
         sb.Append($"contacts mode={Names.Snake(ContactsMode)} allow={string.Join(",", ContactsAllow.Select(PhoneNumber.Redact).Order(StringComparer.Ordinal))} new_chats_per_day={NewChatsPerDay}\n");
         sb.Append($"join mode={Names.Snake(JoinMode)} allow={string.Join(",", JoinAllow.Select(a => a.ToString()).Order(StringComparer.Ordinal))}\n");
+        sb.Append($"folders mode={Names.Snake(FoldersMode)}\n");
+        sb.Append($"add_member mode={Names.Snake(AddMemberMode)} chats={string.Join(",", AddMemberChats.Select(a => a.ToString()).Order(StringComparer.Ordinal))}\n");
         return sb.ToString();
     }
 

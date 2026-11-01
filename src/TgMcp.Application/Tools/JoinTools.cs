@@ -6,23 +6,29 @@ using TgMcp.Domain;
 
 namespace TgMcp.Application.Tools;
 
-/// <summary>Limits join_chat calls (limits.joinsPerHour).</summary>
+/// <summary>Limits join_chat calls (limits.joinsPerHour and limits.joinsPerDay).</summary>
 public interface IJoinLimiter
 {
-    /// <summary>Takes one join token; false if the caller must be refused.</summary>
-    bool TryAcquire();
+    /// <summary>Takes one join token from both buckets, or returns the limit that refused the call.</summary>
+    PaceLimit TryAcquire();
 }
 
-/// <summary>Token bucket of limits.joinsPerHour tokens per hour.</summary>
-public sealed class JoinRateLimiter : IJoinLimiter
+/// <summary>Token buckets of limits.joinsPerHour tokens per hour and limits.joinsPerDay tokens per day.</summary>
+public sealed class JoinRateLimiter : PacedLimiter, IJoinLimiter
 {
-    private readonly TokenBucket _bucket;
-
     /// <summary>Creates the limiter.</summary>
-    public JoinRateLimiter(int perHour, TimeProvider time) => _bucket = new TokenBucket(perHour, TimeSpan.FromHours(1), time);
+    public JoinRateLimiter(int perHour, int perDay, TimeProvider time) : base(perHour, perDay, time)
+    {
+    }
+}
 
-    /// <inheritdoc />
-    public bool TryAcquire() => _bucket.TryAcquire();
+/// <summary>Client text for a call refused by an hourly/daily pace limit.</summary>
+internal static class Pace
+{
+    /// <summary>E.g. "join limit reached (limits.joinsPerDay=20)".</summary>
+    public static string Message(string what, PaceLimit hit, string hourKey, int perHour, string dayKey, int perDay) => hit == PaceLimit.Day
+        ? $"{what} limit reached ({dayKey}={perDay} per 24 hours; spread large batches over several days)"
+        : $"{what} limit reached ({hourKey}={perHour})";
 }
 
 /// <summary>Shared join logic: target parsing, deny check on the resolved chat, rule snippet.</summary>
@@ -113,8 +119,11 @@ public sealed class JoinChatTool
                 };
                 return new ToolOutcome(ToolResult.Ok(already), preview.ChatId, 0, true, "join", JoinSupport.AuditReason(t, jd.Mode, "already member"));
             }
-            if (!_limiter.TryAcquire())
-                return ToolOutcome.Refused($"join limit reached (limits.joinsPerHour={config.JoinsPerHour})", preview.ChatId, "limits");
+            if (_limiter.TryAcquire() is not PaceLimit.None and var hit)
+            {
+                return ToolOutcome.Refused(Pace.Message("join", hit, "limits.joinsPerHour", config.JoinsPerHour, "limits.joinsPerDay", config.JoinsPerDay),
+                    preview.ChatId, "limits");
+            }
 
             if (jd.Mode == WriteMode.Draft)
             {

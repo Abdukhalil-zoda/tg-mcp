@@ -228,6 +228,113 @@ internal sealed class FakeTelegram : ITelegramClient
         return Task.FromResult(JoinStatus == "requested" ? new TgJoinResult("requested", null, "") : new TgJoinResult(JoinStatus, p.ChatId ?? -100777, p.Title));
     }
 
+    public List<TgPublicChat> PublicChats { get; } = [];
+    public List<string> PublicQueries { get; } = [];
+
+    public Task<IReadOnlyList<TgPublicChat>> SearchPublicChatsAsync(string query, int limit, CancellationToken ct)
+    {
+        Calls++;
+        PublicQueries.Add(query);
+        return Task.FromResult<IReadOnlyList<TgPublicChat>>([.. PublicChats.Where(c => c.Title.Contains(query, StringComparison.OrdinalIgnoreCase)
+            || c.Usernames.Any(u => u.Contains(query.TrimStart('@'), StringComparison.OrdinalIgnoreCase))).Take(limit)]);
+    }
+
+    public Task<TgPublicChat?> FindPublicChatAsync(string username, CancellationToken ct)
+    {
+        Calls++;
+        return Task.FromResult(PublicChats.FirstOrDefault(c => c.Usernames.Any(u => u.Equals(username, StringComparison.OrdinalIgnoreCase))));
+    }
+
+    public List<TgDirectoryChat> Directory { get; } = [];
+    public int? LastScanMax { get; private set; }
+
+    public Task<IReadOnlyList<TgDirectoryChat>> ScanGroupsAsync(int maxChats, CancellationToken ct)
+    {
+        Calls++;
+        LastScanMax = maxChats;
+        return Task.FromResult<IReadOnlyList<TgDirectoryChat>>([.. Directory.Take(maxChats)]);
+    }
+
+    public Dictionary<long, TgUser> Users { get; } = [];
+    public List<(long Chat, long User)> Added { get; } = [];
+    public TelegramCallException? AddFailure { get; set; }
+
+    public Task<TgUser?> GetUserAsync(long userId, CancellationToken ct)
+    {
+        Calls++;
+        return Task.FromResult(Users.GetValueOrDefault(userId));
+    }
+
+    public Task<TgUser?> FindUserAsync(string username, CancellationToken ct)
+    {
+        Calls++;
+        return Task.FromResult(Users.Values.FirstOrDefault(u => string.Equals(u.Username, username, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    public Task AddChatMemberAsync(long chatId, long userId, CancellationToken ct)
+    {
+        Calls++;
+        if (AddFailure is not null) throw AddFailure;
+        Added.Add((chatId, userId));
+        return Task.CompletedTask;
+    }
+
+    public Dictionary<int, (string Name, long[] Chats)> CreatedFolders { get; } = [];
+    public List<int> DeletedFolders { get; } = [];
+    public HashSet<long> NotLinkable { get; } = [];
+    public List<(int Folder, long[] Chats, string Link)> FolderLinks { get; } = [];
+    public TelegramCallException? CreateFolderFailure { get; set; }
+    public int FailCreateFolderAfter { get; set; } = int.MaxValue;
+    private int _nextFolder = 10;
+
+    public Task<int> CreateChatFolderAsync(string name, IReadOnlyList<long> chatIds, CancellationToken ct)
+    {
+        Calls++;
+        if (CreateFolderFailure is not null && CreatedFolders.Count >= FailCreateFolderAfter) throw CreateFolderFailure;
+        var id = ++_nextFolder;
+        CreatedFolders[id] = (name, [.. chatIds]);
+        return Task.FromResult(id);
+    }
+
+    public Task<IReadOnlyList<long>> GetChatsForFolderLinkAsync(int folderId, CancellationToken ct)
+    {
+        Calls++;
+        return Task.FromResult<IReadOnlyList<long>>([.. CreatedFolders[folderId].Chats.Where(c => !NotLinkable.Contains(c))]);
+    }
+
+    public Task<string> CreateFolderLinkAsync(int folderId, IReadOnlyList<long> chatIds, CancellationToken ct)
+    {
+        Calls++;
+        var link = $"https://t.me/addlist/SecretSlug{folderId}";
+        FolderLinks.Add((folderId, [.. chatIds], link));
+        return Task.FromResult(link);
+    }
+
+    public Task DeleteChatFolderAsync(int folderId, CancellationToken ct)
+    {
+        Calls++;
+        DeletedFolders.Add(folderId);
+        return Task.CompletedTask;
+    }
+
+    public Dictionary<string, TgFolderPreview> FolderPreviews { get; } = [];
+    public List<(string Slug, long[] Chats)> JoinedFolders { get; } = [];
+    public TelegramCallException? AddFolderFailure { get; set; }
+
+    public Task<TgFolderPreview> CheckFolderLinkAsync(FolderLink link, CancellationToken ct)
+    {
+        Calls++;
+        return FolderPreviews.TryGetValue(link.Slug, out var p) ? Task.FromResult(p) : throw new TelegramCallException(400, "INVITE_SLUG_EXPIRED");
+    }
+
+    public Task AddFolderByLinkAsync(FolderLink link, IReadOnlyList<long> chatIds, CancellationToken ct)
+    {
+        Calls++;
+        if (AddFolderFailure is not null) throw AddFolderFailure;
+        JoinedFolders.Add((link.Slug, [.. chatIds]));
+        return Task.CompletedTask;
+    }
+
     public Task<IReadOnlyDictionary<string, IReadOnlySet<long>>> GetFolderChatsAsync(CancellationToken ct)
     {
         Calls++;
@@ -327,6 +434,27 @@ internal sealed class MemoryDraftStore : IDraftStore
         return Task.FromResult(d);
     }
 
+    public Task<Draft> SaveAddMemberAsync(string chatTitle, PendingAddMember add, CancellationToken ct)
+    {
+        var d = new Draft($"{++_next:x8}", Harness.Now, chatTitle, null, Draft.AddMemberKind, AddMember: add);
+        Drafts[d.Id] = d;
+        return Task.FromResult(d);
+    }
+
+    public Task<Draft> SaveShareFolderAsync(PendingShareFolder share, CancellationToken ct)
+    {
+        var d = new Draft($"{++_next:x8}", Harness.Now, share.Name, null, Draft.ShareFolderKind, ShareFolder: share);
+        Drafts[d.Id] = d;
+        return Task.FromResult(d);
+    }
+
+    public Task<Draft> SaveJoinFolderAsync(PendingJoinFolder join, CancellationToken ct)
+    {
+        var d = new Draft($"{++_next:x8}", Harness.Now, join.FolderName, null, Draft.JoinFolderKind, JoinFolder: join);
+        Drafts[d.Id] = d;
+        return Task.FromResult(d);
+    }
+
     public Task<IReadOnlyList<Draft>> ListAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<Draft>>([.. Drafts.Values]);
     public Task<Draft?> GetAsync(string id, CancellationToken ct) => Task.FromResult(Drafts.GetValueOrDefault(id));
     public Task<bool> DeleteAsync(string id, CancellationToken ct) => Task.FromResult(Drafts.Remove(id));
@@ -410,7 +538,14 @@ internal sealed class Harness
         _newChats ??= new NewChatRateLimiter(Policy.Config.NewChatsPerDay, Time));
     public DraftCommands DraftCommands => new(DraftStore, Context, Audit);
     private IJoinLimiter? _joinLimiter;
-    public JoinChatTool Join => new(Context, DraftStore, _joinLimiter ??= new JoinRateLimiter(Policy.Config.JoinsPerHour, Time));
+    public JoinChatTool Join => new(Context, DraftStore, _joinLimiter ??= new JoinRateLimiter(Policy.Config.JoinsPerHour, Policy.Config.JoinsPerDay, Time));
+    private IAddMemberLimiter? _addLimiter;
+    public AddMemberTool AddMember => new(Context, DraftStore, _addLimiter ??= new AddMemberRateLimiter(Policy.Config.AddsPerHour, Policy.Config.AddsPerDay, Time));
+    private IPublicSearchLimiter? _publicLimiter;
+    public SearchPublicTool SearchPublic => new(Context, _publicLimiter ??= new PublicSearchRateLimiter(Policy.Config.PublicSearchesPerHour, Time));
+    public FindChatsTool FindChats => new(Context);
+    public ShareFolderTool ShareFolder => new(Context, DraftStore);
+    public JoinFolderTool JoinFolder => new(Context, DraftStore, _joinLimiter ??= new JoinRateLimiter(Policy.Config.JoinsPerHour, Policy.Config.JoinsPerDay, Time));
     public PreviewChatTool Preview => new(Context);
     public MarkReadTool MarkRead => new(Context);
     public EditMessageTool Edit => new(Context, DraftStore);

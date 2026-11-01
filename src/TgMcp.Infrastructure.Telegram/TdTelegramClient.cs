@@ -461,6 +461,231 @@ public sealed class TdTelegramClient : ITelegramClient, IInboundMessageSource, I
         }
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<TgPublicChat>> SearchPublicChatsAsync(string query, int limit, CancellationToken ct)
+    {
+        var found = await S.CallAsync(new SearchPublicChats { Query = query, TypeFilter = null }, ct).ConfigureAwait(false);
+        var list = new List<TgPublicChat>();
+        foreach (var id in (found.ChatIds ?? []).Take(limit))
+        {
+            try
+            {
+                list.Add(await DescribePublicAsync(await S.CallAsync(new GetChat { ChatId = id }, ct).ConfigureAwait(false), ct).ConfigureAwait(false));
+            }
+            catch (TelegramCallException e) when (e.Code is 400 or 404)
+            {
+                // skip chats that cannot be described
+            }
+        }
+        return list;
+    }
+
+    /// <inheritdoc />
+    public async Task<TgPublicChat?> FindPublicChatAsync(string username, CancellationToken ct)
+    {
+        Chat chat;
+        try
+        {
+            chat = await S.CallAsync(new SearchPublicChat { Username = username }, ct).ConfigureAwait(false);
+        }
+        catch (TelegramCallException e) when (e.Code == 400)
+        {
+            return null;
+        }
+        return await DescribePublicAsync(chat, ct).ConfigureAwait(false);
+    }
+
+    private async Task<TgPublicChat> DescribePublicAsync(Chat chat, CancellationToken ct)
+    {
+        var mapped = await MapChat(chat, ct).ConfigureAwait(false);
+        switch (chat.Type)
+        {
+            case ChatType.ChatTypeSupergroup sg:
+                var g = await S.CallAsync(new GetSupergroup { SupergroupId = sg.SupergroupId }, ct).ConfigureAwait(false);
+                return new TgPublicChat(chat.Id, mapped.Title, mapped.Usernames, mapped.Kind, sg.IsChannel ? "channel" : "supergroup", g.MemberCount);
+            case ChatType.ChatTypeBasicGroup bg:
+                var b = await S.CallAsync(new GetBasicGroup { BasicGroupId = bg.BasicGroupId }, ct).ConfigureAwait(false);
+                return new TgPublicChat(chat.Id, mapped.Title, mapped.Usernames, mapped.Kind, "group", b.MemberCount);
+            default:
+                return new TgPublicChat(chat.Id, mapped.Title, mapped.Usernames, mapped.Kind, mapped.Kind == ChatKind.Bot ? "bot" : "private", 0);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<TgDirectoryChat>> ScanGroupsAsync(int maxChats, CancellationToken ct)
+    {
+        var result = new List<TgDirectoryChat>();
+        var seen = new HashSet<long>();
+        foreach (var (list, archived) in new (ChatList List, bool Archived)[] { (new ChatList.ChatListMain(), false), (new ChatList.ChatListArchive(), true) })
+        {
+            var left = maxChats - seen.Count;
+            if (left <= 0) break;
+            for (var i = 0; i < 50; i++)
+            {
+                try
+                {
+                    await S.CallAsync(new LoadChats { ChatList = list, Limit = Math.Min(100, left) }, ct).ConfigureAwait(false);
+                }
+                catch (TelegramCallException e) when (e.Code == 404)
+                {
+                    break; // fully loaded
+                }
+                var loaded = await S.CallAsync(new GetChats { ChatList = list, Limit = left }, ct).ConfigureAwait(false);
+                if ((loaded.ChatIds?.Length ?? 0) >= left) break;
+            }
+            var ids = await S.CallAsync(new GetChats { ChatList = list, Limit = left }, ct).ConfigureAwait(false);
+            foreach (var id in ids.ChatIds ?? [])
+            {
+                if (!seen.Add(id)) continue;
+                try
+                {
+                    var chat = await S.CallAsync(new GetChat { ChatId = id }, ct).ConfigureAwait(false);
+                    if (await DescribeGroupAsync(chat, archived, ct).ConfigureAwait(false) is { } entry) result.Add(entry);
+                }
+                catch (TelegramCallException e) when (e.Code is 400 or 404)
+                {
+                    // skip chats that cannot be described
+                }
+            }
+        }
+        return result;
+    }
+
+    private async Task<TgDirectoryChat?> DescribeGroupAsync(Chat chat, bool archived, CancellationToken ct)
+    {
+        var memberCan = chat.Permissions?.CanInviteUsers == true;
+        switch (chat.Type)
+        {
+            case ChatType.ChatTypeSupergroup sg:
+                var g = await S.CallAsync(new GetSupergroup { SupergroupId = sg.SupergroupId }, ct).ConfigureAwait(false);
+                return new TgDirectoryChat(chat.Id, chat.Title ?? "", Usernames(g.Usernames), sg.IsChannel ? ChatKind.Channel : ChatKind.Group,
+                    sg.IsChannel ? "channel" : "supergroup", g.MemberCount, archived, CanInvite(g.Status, memberCan && !sg.IsChannel), IsInviteAdmin(g.Status));
+            case ChatType.ChatTypeBasicGroup bg:
+                var b = await S.CallAsync(new GetBasicGroup { BasicGroupId = bg.BasicGroupId }, ct).ConfigureAwait(false);
+                if (!b.IsActive) return null; // upgraded to a supergroup, which is listed itself
+                return new TgDirectoryChat(chat.Id, chat.Title ?? "", [], ChatKind.Group, "group", b.MemberCount, archived, CanInvite(b.Status, memberCan), IsInviteAdmin(b.Status));
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>Creator, admin with can_invite_users, or a member when the chat's permissions let members invite.</summary>
+    private static bool CanInvite(ChatMemberStatus? status, bool membersMayInvite) => status switch
+    {
+        ChatMemberStatus.ChatMemberStatusCreator c => c.IsMember,
+        ChatMemberStatus.ChatMemberStatusAdministrator a => a.Rights?.CanInviteUsers == true,
+        ChatMemberStatus.ChatMemberStatusMember => membersMayInvite,
+        ChatMemberStatus.ChatMemberStatusRestricted r => r.IsMember && membersMayInvite && r.Permissions?.CanInviteUsers == true,
+        _ => false,
+    };
+
+    /// <summary>Creator or an admin with can_invite_users: may create invite links.</summary>
+    private static bool IsInviteAdmin(ChatMemberStatus? status) => status switch
+    {
+        ChatMemberStatus.ChatMemberStatusCreator c => c.IsMember,
+        ChatMemberStatus.ChatMemberStatusAdministrator a => a.Rights?.CanInviteUsers == true,
+        _ => false,
+    };
+
+    /// <inheritdoc />
+    public async Task<int> CreateChatFolderAsync(string name, IReadOnlyList<long> chatIds, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(chatIds);
+        var info = await S.CallAsync(new CreateChatFolder
+        {
+            Folder = new ChatFolder
+            {
+                Name = new ChatFolderName { Text = new FormattedText { Text = name, Entities = [] }, AnimateCustomEmoji = false },
+                IncludedChatIds = [.. chatIds],
+                PinnedChatIds = [],
+                ExcludedChatIds = [],
+                IsShareable = false,
+                ColorId = -1,
+            },
+        }, ct).ConfigureAwait(false);
+        return info.Id;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<long>> GetChatsForFolderLinkAsync(int folderId, CancellationToken ct) =>
+        (await S.CallAsync(new GetChatsForChatFolderInviteLink { ChatFolderId = folderId }, ct).ConfigureAwait(false)).ChatIds ?? [];
+
+    /// <inheritdoc />
+    public async Task<string> CreateFolderLinkAsync(int folderId, IReadOnlyList<long> chatIds, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(chatIds);
+        var link = await S.CallAsync(new CreateChatFolderInviteLink { ChatFolderId = folderId, Name = "", ChatIds = [.. chatIds] }, ct).ConfigureAwait(false);
+        return link.InviteLink ?? "";
+    }
+
+    /// <inheritdoc />
+    public Task DeleteChatFolderAsync(int folderId, CancellationToken ct) =>
+        S.CallAsync(new DeleteChatFolder { ChatFolderId = folderId, LeaveChatIds = [] }, ct);
+
+    /// <inheritdoc />
+    public async Task<TgFolderPreview> CheckFolderLinkAsync(FolderLink link, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(link);
+        var info = await S.CallAsync(new CheckChatFolderInviteLink { InviteLink = link.Canonical }, ct).ConfigureAwait(false);
+        return new TgFolderPreview(info.ChatFolderInfo?.Name?.Text?.Text ?? "", info.ChatFolderInfo?.Id is int id && id != 0,
+            info.MissingChatIds ?? [], info.AddedChatIds ?? []);
+    }
+
+    /// <inheritdoc />
+    public Task AddFolderByLinkAsync(FolderLink link, IReadOnlyList<long> chatIds, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(link);
+        ArgumentNullException.ThrowIfNull(chatIds);
+        return S.CallAsync(new AddChatFolderByInviteLink { InviteLink = link.Canonical, ChatIds = [.. chatIds] }, ct);
+    }
+
+    /// <inheritdoc />
+    public async Task<TgUser?> GetUserAsync(long userId, CancellationToken ct)
+    {
+        try
+        {
+            return MapUser(await S.CallAsync(new GetUser { UserId = userId }, ct).ConfigureAwait(false));
+        }
+        catch (TelegramCallException e) when (e.Code is 400 or 404)
+        {
+            return null;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<TgUser?> FindUserAsync(string username, CancellationToken ct)
+    {
+        Chat chat;
+        try
+        {
+            chat = await S.CallAsync(new SearchPublicChat { Username = username }, ct).ConfigureAwait(false);
+        }
+        catch (TelegramCallException e) when (e.Code == 400)
+        {
+            return null;
+        }
+        return chat.Type is ChatType.ChatTypePrivate p ? await GetUserAsync(p.UserId, ct).ConfigureAwait(false) : null;
+    }
+
+    private static TgUser MapUser(User user)
+    {
+        var name = $"{user.FirstName} {user.LastName}".Trim();
+        return new TgUser(user.Id, name.Length > 0 ? name : $"user {user.Id}", user.Usernames?.ActiveUsernames is [var first, ..] ? first : null,
+            user.Type is UserType.UserTypeBot);
+    }
+
+    /// <inheritdoc />
+    public async Task AddChatMemberAsync(long chatId, long userId, CancellationToken ct)
+    {
+        var failed = await S.CallAsync(new AddChatMember { ChatId = chatId, UserId = userId, ForwardLimit = 0 }, ct).ConfigureAwait(false);
+        if (failed.FailedToAddMembers_ is [var f, ..])
+        {
+            throw new TelegramCallException(403, f.PremiumRequiredToSendMessages
+                ? "USER_PRIVACY_RESTRICTED: the user accepts invitations only from Telegram Premium users"
+                : "USER_PRIVACY_RESTRICTED: the user's privacy settings do not allow adding them; send them an invite link instead");
+        }
+    }
+
     private async Task<bool> IsMemberAsync(Chat chat, CancellationToken ct)
     {
         switch (chat.Type)

@@ -18,10 +18,23 @@ namespace TgMcp.Application.Drafts;
 /// <param name="Edit">The edit to perform (kind "edit").</param>
 /// <param name="Delete">The deletion to perform (kind "delete").</param>
 /// <param name="Phone">The message to a phone number (kind "phone_message").</param>
+/// <param name="AddMember">The user to add to a chat (kind "add_member").</param>
+/// <param name="ShareFolder">The chats to share as folder links (kind "share_folder").</param>
+/// <param name="JoinFolder">The folder link to join (kind "join_folder").</param>
 public sealed record Draft(string Id, DateTimeOffset CreatedUtc, string ChatTitle, OutgoingMessage? Message,
     string Kind = Draft.MessageKind, PendingJoin? Join = null, PendingReaction? Reaction = null, PendingForward? Forward = null,
-    PendingEdit? Edit = null, PendingDelete? Delete = null, PendingPhoneMessage? Phone = null)
+    PendingEdit? Edit = null, PendingDelete? Delete = null, PendingPhoneMessage? Phone = null,
+    PendingAddMember? AddMember = null, PendingShareFolder? ShareFolder = null, PendingJoinFolder? JoinFolder = null)
 {
+    /// <summary>Kind of an add-member draft.</summary>
+    public const string AddMemberKind = "add_member";
+
+    /// <summary>Kind of a share-folder draft.</summary>
+    public const string ShareFolderKind = "share_folder";
+
+    /// <summary>Kind of a join-folder draft.</summary>
+    public const string JoinFolderKind = "join_folder";
+
     /// <summary>Kind of a message to a phone number.</summary>
     public const string PhoneKind = "phone_message";
 
@@ -42,6 +55,27 @@ public sealed record Draft(string Id, DateTimeOffset CreatedUtc, string ChatTitl
 
     /// <summary>Kind of a join draft.</summary>
     public const string JoinKind = "join";
+}
+
+/// <summary>A user to add to a group or channel, waiting for the owner's approval.</summary>
+/// <param name="ChatId">Target group or channel.</param>
+/// <param name="UserId">User to add.</param>
+/// <param name="UserLabel">@username or display name at the time (for the owner's overview).</param>
+public sealed record PendingAddMember(long ChatId, long UserId, string UserLabel);
+
+/// <summary>Chats to share as one or more folder invite links, waiting for the owner's approval.</summary>
+/// <param name="Name">Folder name (1-12 characters).</param>
+/// <param name="ChatIds">Chats to put into the folder(s).</param>
+public sealed record PendingShareFolder(string Name, IReadOnlyList<long> ChatIds);
+
+/// <summary>A folder link to join, waiting for the owner's approval.</summary>
+/// <param name="Slug">The link slug (stored owner-only; never audited).</param>
+/// <param name="FolderName">Folder name at preview time.</param>
+/// <param name="ChatCount">Chats that would be joined at preview time.</param>
+public sealed record PendingJoinFolder(string Slug, string FolderName, int ChatCount)
+{
+    /// <summary>The link to join.</summary>
+    public FolderLink Link => new(Slug);
 }
 
 /// <summary>A first message to a phone number, waiting for the owner's approval (the number is stored owner-only, never audited).</summary>
@@ -112,6 +146,15 @@ public interface IDraftStore
 
     /// <summary>Saves a new reaction draft.</summary>
     Task<Draft> SaveReactionAsync(string chatTitle, PendingReaction reaction, CancellationToken ct);
+
+    /// <summary>Saves a new add-member draft.</summary>
+    Task<Draft> SaveAddMemberAsync(string chatTitle, PendingAddMember add, CancellationToken ct);
+
+    /// <summary>Saves a new share-folder draft.</summary>
+    Task<Draft> SaveShareFolderAsync(PendingShareFolder share, CancellationToken ct);
+
+    /// <summary>Saves a new join-folder draft.</summary>
+    Task<Draft> SaveJoinFolderAsync(PendingJoinFolder join, CancellationToken ct);
 
     /// <summary>All drafts, oldest first.</summary>
     Task<IReadOnlyList<Draft>> ListAsync(CancellationToken ct);

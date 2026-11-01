@@ -109,10 +109,10 @@ public sealed record JoinTarget(JoinTargetKind Kind, string Value)
     }
 
     /// <summary>Telegram usernames: 4-32 characters, a letter first, then letters, digits or '_'.</summary>
-    internal static bool IsUsername(string u) =>
+    public static bool IsUsername(string u) =>
         u.Length is >= 4 and <= 32 && char.IsAsciiLetter(u[0]) && u.All(c => char.IsAsciiLetterOrDigit(c) || c == '_') && !u.EndsWith('_');
 
     /// <summary>Invite hashes are URL-safe base64-like strings.</summary>
-    internal static bool IsHash(string h) =>
+    public static bool IsHash(string h) =>
         h.Length is >= 8 and <= 128 && h.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-');
 }
