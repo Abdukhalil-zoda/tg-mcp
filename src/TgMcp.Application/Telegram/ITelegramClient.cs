@@ -287,7 +287,7 @@ public interface ITelegramClient
 
     /// <summary>
     /// The owner's groups and channels from the main and the archive chat lists (loadChats/getChats), scanning at most
-    /// <paramref name="maxChats"/> chats in total. Private chats are skipped.
+    /// <paramref name="maxChats"/> chats (private chats included) in EACH list. Private chats are not returned.
     /// </summary>
     Task<IReadOnlyList<TgDirectoryChat>> ScanGroupsAsync(int maxChats, CancellationToken ct);
 

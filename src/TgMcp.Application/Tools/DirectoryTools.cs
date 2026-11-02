@@ -93,8 +93,8 @@ public sealed class SearchPublicTool
 /// </summary>
 public sealed class FindChatsTool
 {
-    /// <summary>Most chats scanned per call (main + archive).</summary>
-    public const int MaxScan = 2000;
+    /// <summary>Most chats scanned per list per call (main and archive each; private chats count too).</summary>
+    public const int MaxScan = 10000;
 
     /// <summary>Most results per page.</summary>
     public const int MaxPage = 2000;

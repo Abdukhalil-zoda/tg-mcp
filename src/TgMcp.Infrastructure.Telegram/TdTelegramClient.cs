@@ -518,9 +518,9 @@ public sealed class TdTelegramClient : ITelegramClient, IInboundMessageSource, I
         var seen = new HashSet<long>();
         foreach (var (list, archived) in new (ChatList List, bool Archived)[] { (new ChatList.ChatListMain(), false), (new ChatList.ChatListArchive(), true) })
         {
-            var left = maxChats - seen.Count;
-            if (left <= 0) break;
-            for (var i = 0; i < 50; i++)
+            // Each list gets the whole budget: private chats in the main list must not use up the archive's share.
+            var left = maxChats;
+            for (var i = 0; i < 200; i++)
             {
                 try
                 {

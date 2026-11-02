@@ -263,7 +263,7 @@ public sealed class TelegramTools
     [McpServerTool(Name = "find_chats", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
     [Description("Find the owner's OWN groups and channels (main and archive chat lists) by title keywords, or list all of them when no keywords are given. " +
         "Returns directory data only (id, title, type, @username, member count, archived, can_add_members, can_include_in_folder_link), never messages. " +
-        "Paged with offset/limit; at most 2000 chats are scanned." + Untrusted)]
+        "Paged with offset/limit; main and archive lists are scanned, at most 10000 chats each." + Untrusted)]
     public async Task<CallToolResult> FindChats(
         [Description("Keywords; a chat matches if its title or @username contains ANY of them (case-insensitive). Empty = all chats.")] string[]? keywords = null,
         [Description("\"group\", \"channel\" or \"any\".")] string kind = "any",
