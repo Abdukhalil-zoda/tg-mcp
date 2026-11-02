@@ -614,8 +614,20 @@ public sealed class TdTelegramClient : ITelegramClient, IInboundMessageSource, I
     public async Task<string> CreateFolderLinkAsync(int folderId, IReadOnlyList<long> chatIds, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(chatIds);
-        var link = await S.CallAsync(new CreateChatFolderInviteLink { ChatFolderId = folderId, Name = "", ChatIds = [.. chatIds] }, ct).ConfigureAwait(false);
-        return link.InviteLink ?? "";
+        // A folder made by createChatFolder reaches the server asynchronously; until then the link call fails with
+        // FILTER_ID_INVALID. Retry for about 15 seconds before giving up.
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                var link = await S.CallAsync(new CreateChatFolderInviteLink { ChatFolderId = folderId, Name = "", ChatIds = [.. chatIds] }, ct).ConfigureAwait(false);
+                return link.InviteLink ?? "";
+            }
+            catch (TelegramCallException e) when (attempt < 6 && e.Message.Contains("FILTER_ID_INVALID", StringComparison.Ordinal))
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1 + attempt), ct).ConfigureAwait(false);
+            }
+        }
     }
 
     /// <inheritdoc />
