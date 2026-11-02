@@ -135,7 +135,7 @@ internal static class FolderSupport
             }
             catch (TelegramCallException e)
             {
-                error = Friendly(e) ?? $"Telegram refused to create the folder: {ErrorName(e)}";
+                error = (Friendly(e) is { } f ? $"{f} [telegram: {e.TdMessage}]" : null) ?? $"Telegram refused to create the folder: {ErrorName(e)}";
                 notProcessed += chunk.Length;
                 continue;
             }
@@ -161,7 +161,7 @@ internal static class FolderSupport
             }
             catch (TelegramCallException e)
             {
-                error = Friendly(e) ?? $"Telegram refused to create the folder link: {ErrorName(e)}";
+                error = (Friendly(e) is { } f ? $"{f} [telegram: {e.TdMessage}]" : null) ?? $"Telegram refused to create the folder link: {ErrorName(e)}";
                 notProcessed += chunk.Length;
                 try
                 {
