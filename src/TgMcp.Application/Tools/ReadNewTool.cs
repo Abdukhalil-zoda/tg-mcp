@@ -39,7 +39,7 @@ public sealed class ReadNewTool
     public const int MaxText = 4096;
 
     /// <summary>Most history pages fetched per chat while looking for <c>after_id</c>.</summary>
-    public const int ScanPages = 5;
+    public const int ScanPages = 20; // 2000 messages: an hourly poll of the busiest logistics groups (~800/h) must not gap
 
     /// <summary>Prefix of export file names.</summary>
     public const string ExportPrefix = "read_new";
