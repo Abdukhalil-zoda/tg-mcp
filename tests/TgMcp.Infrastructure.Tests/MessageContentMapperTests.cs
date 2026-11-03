@@ -29,4 +29,15 @@ public class MessageContentMapperTests
         Assert.Equal("[sticker 👍]", MessageContentMapper.Map(new MessageSticker { Sticker = new Sticker { Emoji = "👍" } }).Text);
         Assert.Equal("[location]", MessageContentMapper.Map(new MessageLocation()).Text);
     }
+
+    [Fact]
+    public void Names_the_content_kind()
+    {
+        Assert.Equal("text", MessageContentMapper.Kind(new MessageText { Text = T("hi") }));
+        Assert.Equal("photo", MessageContentMapper.Kind(new MessagePhoto()));
+        Assert.Equal("voice", MessageContentMapper.Kind(new MessageVoiceNote()));
+        Assert.Equal("video_note", MessageContentMapper.Kind(new MessageVideoNote()));
+        Assert.Equal("chataddmembers", MessageContentMapper.Kind(new MessageChatAddMembers()));
+        Assert.Equal("empty", MessageContentMapper.Kind(null));
+    }
 }

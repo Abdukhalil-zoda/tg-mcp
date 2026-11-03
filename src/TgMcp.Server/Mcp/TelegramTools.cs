@@ -19,6 +19,7 @@ public sealed class TelegramTools
     private readonly ListChatsTool _list;
     private readonly ReadMessagesTool _read;
     private readonly ReadTopicTool _topic;
+    private readonly ReadNewTool _readNew;
     private readonly GetMessageTool _get;
     private readonly SearchChatTool _searchChat;
     private readonly SearchAllTool _searchAll;
@@ -43,8 +44,9 @@ public sealed class TelegramTools
         SearchChatTool searchChat, SearchAllTool searchAll, DownloadMediaTool download, SendMessageTool send,
         JoinChatTool join, PreviewChatTool preview, MarkReadTool markRead, ReactTool react, ForwardTool forward,
         EditMessageTool edit, DeleteMessageTool delete, AiTools ai, SearchPublicTool searchPublic, FindChatsTool findChats,
-        AddMemberTool addMember, ShareFolderTool shareFolder, JoinFolderTool joinFolder)
+        AddMemberTool addMember, ShareFolderTool shareFolder, JoinFolderTool joinFolder, ReadNewTool readNew)
     {
+        _readNew = readNew;
         _searchPublic = searchPublic;
         _findChats = findChats;
         _addMember = addMember;
@@ -96,6 +98,21 @@ public sealed class TelegramTools
         [Description("Start from this message id and go back in time (0 = latest).")] long from_message_id = 0,
         CancellationToken cancellationToken = default) =>
         Map(await _topic.RunAsync(chat, topic_id, limit, from_message_id, cancellationToken).ConfigureAwait(false));
+
+    /// <summary>read_new: new messages of many chats in one call (for pollers).</summary>
+    [McpServerTool(Name = "read_new", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description("Poll several chats in one call: per chat the messages with id > after_id, OLDEST FIRST, at most limit_per_chat. " +
+        "Store each chat's last_id and pass it as after_id next time; more=true means call again right away from last_id. " +
+        "after_id=0 bootstraps with only the newest messages. Chats are read one after another; a chat without read access gets a " +
+        "'denied' entry and does not fail the others. No media, reactions or entities; non-text messages have 'kind'. " +
+        "export=true writes the full result to a file in the data dir and returns only a summary without text." + Untrusted)]
+    public async Task<CallToolResult> ReadNew(
+        [Description("1-50 chats: { chat: id or @username, after_id: last seen message id (0 = bootstrap) }.")] ReadNewChat[] chats,
+        [Description("Maximum messages per chat (1-100).")] int limit_per_chat = 50,
+        [Description("Maximum characters of text per message; longer texts are cut and marked truncated (1-4096).")] int max_text = 1500,
+        [Description("Write the full result to /data/exports/read_new-<UTC>.json and return only a summary (no message text).")] bool export = false,
+        CancellationToken cancellationToken = default) =>
+        Map(await _readNew.RunAsync(chats, limit_per_chat, max_text, export, cancellationToken).ConfigureAwait(false));
 
     /// <summary>get_message.</summary>
     [McpServerTool(Name = "get_message", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = true)]

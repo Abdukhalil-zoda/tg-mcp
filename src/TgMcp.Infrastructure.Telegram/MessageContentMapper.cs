@@ -27,6 +27,22 @@ public static class MessageContentMapper
         _ => ($"[{Placeholder(content)}]", null),
     };
 
+    /// <summary>The content kind of <paramref name="content"/> (see <see cref="TgMessage.Kind"/>).</summary>
+    public static string Kind(MessageContent? content) => content switch
+    {
+        MessageText => "text",
+        MessagePhoto => "photo",
+        MessageVideo => "video",
+        MessageDocument => "document",
+        MessageAudio => "audio",
+        MessageVoiceNote => "voice",
+        MessageAnimation => "animation",
+        MessageVideoNote => "video_note",
+        MessageSticker => "sticker",
+        null => "empty",
+        _ => Placeholder(content),
+    };
+
     /// <summary>"[kind]" or "[kind] caption".</summary>
     private static string With(string description, FormattedText? caption) =>
         string.IsNullOrEmpty(caption?.Text) ? description : $"{description} {caption.Text}";

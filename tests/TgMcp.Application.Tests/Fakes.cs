@@ -503,6 +503,18 @@ internal sealed class MemorySentLog : ISentLog
     }
 }
 
+internal sealed class MemoryExportStore : IExportStore
+{
+    public List<(string Prefix, string Json)> Written { get; } = [];
+
+    public Task<StoredExport> WriteAsync(string prefix, string json, CancellationToken ct)
+    {
+        Written.Add((prefix, json));
+        var name = $"{prefix}-{Written.Count}.json";
+        return Task.FromResult(new StoredExport("/data/exports/" + name, name));
+    }
+}
+
 /// <summary>Wires the real use cases to fakes.</summary>
 internal sealed class Harness
 {
@@ -527,6 +539,8 @@ internal sealed class Harness
     public ListChatsTool ListChats => new(Context);
     public ReadMessagesTool Read => new(Context);
     public ReadTopicTool Topic => new(Context);
+    public MemoryExportStore Exports { get; } = new();
+    public ReadNewTool ReadNew => new(Context, Exports);
     public GetMessageTool Get => new(Context);
     public SearchChatTool SearchChat => new(Context);
     public SearchAllTool SearchAll => new(Context);

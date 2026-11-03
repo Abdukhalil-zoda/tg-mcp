@@ -780,7 +780,7 @@ public sealed class TdTelegramClient : ITelegramClient, IInboundMessageSource, I
         var display = username is null ? name : $"{name} (@{username})";
         return new TgMessage(m.ChatId, m.Id, DateTimeOffset.FromUnixTimeSeconds(m.Date), display,
             m.IsOutgoing || (m.SenderId is MessageSender.MessageSenderUser u && u.UserId == _myId), text, media, topic,
-            senderId, username, isBot, replyTo);
+            senderId, username, isBot, replyTo, MessageContentMapper.Kind(m.Content));
     }
 
     private async Task<(string Name, string? Username, bool IsBot, long? Id)> Sender(MessageSender? sender, CancellationToken ct)

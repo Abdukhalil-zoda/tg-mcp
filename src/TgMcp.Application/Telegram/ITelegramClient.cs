@@ -35,6 +35,10 @@ public sealed record TgMedia(int FileId, long Size, string Kind, string? FileNam
 /// <param name="SenderUsername">Sender's first public username, if any.</param>
 /// <param name="SenderIsBot">True if the sender is a bot account.</param>
 /// <param name="ReplyToMessageId">Id of the message this one replies to (same chat), if any.</param>
+/// <param name="Kind">
+/// Content kind: "text", a media kind ("photo", "video", "document", "audio", "voice", "animation", "video_note",
+/// "sticker") or the TDLib content name for anything else (e.g. "chataddmembers", "poll"); null if unknown.
+/// </param>
 public sealed record TgMessage(
     long ChatId,
     long Id,
@@ -47,7 +51,8 @@ public sealed record TgMessage(
     long? SenderId = null,
     string? SenderUsername = null,
     bool SenderIsBot = false,
-    long? ReplyToMessageId = null)
+    long? ReplyToMessageId = null,
+    string? Kind = null)
 {
     /// <summary>True if the message has an attached media file.</summary>
     public bool HasMedia => Media is not null;

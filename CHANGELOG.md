@@ -6,6 +6,11 @@ and the project uses [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `read_new` (read, per chat): polls 1–50 chats in one call. Per chat the messages after `after_id`, oldest
+  first, capped by `limit_per_chat` with `more`/`last_id` for the next window; `after_id: 0` bootstraps with the
+  newest page. Sequential, at most 5 history pages per chat (`gap` when `after_id` is further back). Denied or
+  unknown chats get a per-chat `denied`/`error` entry. Compact output (truncated text, `kind` for non-text, `t.me`
+  links), no media. `export: true` writes the result to `/data/exports` (0600, kept 2 days) and returns a summary.
 - `search_public` (`features.searchPublic`): searches public chats, channels and people by text (`searchPublicChats`),
   exact `@username` matches first (`searchPublicChat`). Directory data only (id, title, `@username`, type, member
   count); deny-rule hits are dropped. `limits.publicSearchesPerHour` (default 20).
@@ -23,7 +28,7 @@ and the project uses [Semantic Versioning](https://semver.org/).
   chats are reported with reasons; Telegram's folder limits are explained), and preview or join a shared folder
   (`checkChatFolderInviteLink` / `addChatFolderByInviteLink`). Folder links are never audited (hash prefix only).
 - `limits.joinsPerDay` (default 20) on top of `limits.joinsPerHour`; `join_chat_folder` counts as one join.
-- `tgmcp config check` shows all new keys; the CI smoke test expects 22 tools.
+- `tgmcp config check` shows all new keys; the CI smoke test expects 23 tools.
 
 ## [0.1.0] - 2026-10-31
 

@@ -53,7 +53,7 @@
 
   // Global switches. Each defaults to false. A capability must be on here AND in the chat's rule.
   "features": {
-    "read": true,           // read messages (read_messages, read_topic, get_message, list_chats details)
+    "read": true,           // read messages (read_messages, read_topic, read_new, get_message, list_chats details)
     "search": true,         // search_chat, search_all
     "mediaDownload": false, // download_media
     "send": false,          // send_message: writing AS YOU, as drafts or directly (see "write" per chat)

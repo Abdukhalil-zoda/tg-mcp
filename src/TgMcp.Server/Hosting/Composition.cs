@@ -73,6 +73,8 @@ public static class Composition
         services.AddSingleton<ListChatsTool>();
         services.AddSingleton<ReadMessagesTool>();
         services.AddSingleton<ReadTopicTool>();
+        services.AddSingleton<IExportStore, FileExportStore>();
+        services.AddSingleton<ReadNewTool>();
         services.AddSingleton<GetMessageTool>();
         services.AddSingleton<SearchChatTool>();
         services.AddSingleton<SearchAllTool>();
